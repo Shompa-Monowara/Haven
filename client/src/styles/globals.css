@@ -235,3 +235,20 @@
     animation: none !important;
   }
 }
+
+/* Leaflet "locate me" control: matches the square zoom buttons above it. */
+.haven-locate-control {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  color: var(--ink, #1f2a33);
+  background: #ffffff;
+  cursor: pointer;
+}
+
+.haven-locate-control:hover {
+  color: var(--brand-strong, #005e8c);
+}

@@ -27,6 +27,11 @@ const envSchema = z
     SMTP_USER: z.string().min(1).optional(),
     SMTP_PASS: z.string().min(1).optional(),
     SMTP_FROM: z.string().min(3).default("Haven <no-reply@haven.test>"),
+    // Optional Cloudinary storage. When all three are set, uploads go to
+    // Cloudinary; otherwise they are written to UPLOAD_DIR on local disk.
+    CLOUDINARY_CLOUD_NAME: z.string().min(1).optional(),
+    CLOUDINARY_API_KEY: z.string().min(1).optional(),
+    CLOUDINARY_API_SECRET: z.string().min(1).optional(),
   })
   .superRefine((value, ctx) => {
     if (value.SMTP_HOST && (value.SMTP_USER === undefined) !== (value.SMTP_PASS === undefined)) {
@@ -42,6 +47,21 @@ const envSchema = z
         code: z.ZodIssueCode.custom,
         path: ["SMTP_FROM"],
         message: "SMTP_FROM must be a valid sender address",
+      });
+    }
+
+    const cloudinaryValues = [
+      value.CLOUDINARY_CLOUD_NAME,
+      value.CLOUDINARY_API_KEY,
+      value.CLOUDINARY_API_SECRET,
+    ];
+    const cloudinaryCount = cloudinaryValues.filter((entry) => entry !== undefined).length;
+    if (cloudinaryCount > 0 && cloudinaryCount < cloudinaryValues.length) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["CLOUDINARY_CLOUD_NAME"],
+        message:
+          "CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, and CLOUDINARY_API_SECRET must be provided together",
       });
     }
   });

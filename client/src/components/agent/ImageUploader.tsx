@@ -11,6 +11,7 @@ interface ImageUploaderProps {
   onChange: (images: PropertyImage[]) => void;
   titleHint: string;
   disabled?: boolean;
+  propertyId?: string;
 }
 
 const MAX_FILES = 20;
@@ -25,7 +26,13 @@ function reindex(images: PropertyImage[]): PropertyImage[] {
   }));
 }
 
-export function ImageUploader({ images, onChange, titleHint, disabled = false }: ImageUploaderProps) {
+export function ImageUploader({
+  images,
+  onChange,
+  titleHint,
+  disabled = false,
+  propertyId,
+}: ImageUploaderProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
   const [dragging, setDragging] = useState(false);
@@ -54,6 +61,7 @@ export function ImageUploader({ images, onChange, titleHint, disabled = false }:
     if (!accepted.length) return;
 
     const formData = new FormData();
+    if (propertyId) formData.append("propertyId", propertyId);
     accepted.forEach((file) => formData.append("images", file));
 
     setUploading(true);

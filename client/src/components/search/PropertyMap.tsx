@@ -135,6 +135,23 @@ export default function PropertyMap({
 
     L.control.zoom({ position: "topright" }).addTo(map);
 
+    const LocateControl = L.Control.extend({
+      onAdd() {
+        const button = L.DomUtil.create("button", "leaflet-bar haven-locate-control");
+        button.type = "button";
+        button.title = "Show my location";
+        button.setAttribute("aria-label", "Show my location");
+        button.innerHTML =
+          '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="3"></circle><path d="M12 2v3M12 19v3M2 12h3M19 12h3"></path></svg>';
+        L.DomEvent.disableClickPropagation(button);
+        L.DomEvent.on(button, "click", () => {
+          map.locate({ setView: true, maxZoom: 14 });
+        });
+        return button;
+      },
+    });
+    new LocateControl({ position: "topright" }).addTo(map);
+
     let tileErrors = 0;
     const tiles = L.tileLayer(MAP_TILE_URL, {
       attribution: MAP_TILE_ATTRIBUTION,

@@ -1,4 +1,5 @@
 import { env } from "../config/env";
+import { AuditLogModel, type AuditLog } from "../models/audit-log.model";
 import { AgentProfileModel } from "../models/agent-profile.model";
 import { PropertyModel } from "../models/property.model";
 import { UserModel } from "../models/user.model";
@@ -630,6 +631,114 @@ export async function seedDevContent(): Promise<void> {
   for (const { slug, agent: owner } of listingOwners) {
     if (!insertedSlugs.has(slug)) continue;
     await PropertyModel.updateOne({ slug }, { $set: { agent: owner } });
+  }
+
+  // Seed a realistic moderation history so the admin audit page and its entity
+  // filters have data. Only when the log is empty, so restarts do not duplicate it.
+  const admin = await UserModel.findOne({ role: "admin" }).select("_id");
+  const existingAuditCount = await AuditLogModel.countDocuments();
+
+  if (admin && existingAuditCount === 0) {
+    const auditSlugs = [
+      "renovated-walk-up-with-a-reading-nook-chicago",
+      "sunlit-brownstone-with-a-private-garden-brooklyn",
+      "rebuilt-cottage-with-a-wraparound-porch-austin",
+    ];
+    const auditProperties = await PropertyModel.find({ slug: { $in: auditSlugs } }).select(
+      "_id slug",
+    );
+    const propertyIdBySlug = new Map(
+      auditProperties.map((property) => [property.slug, property._id]),
+    );
+
+    const submitted = propertyIdBySlug.get("renovated-walk-up-with-a-reading-nook-chicago");
+    const approved = propertyIdBySlug.get("sunlit-brownstone-with-a-private-garden-brooklyn");
+    const rejected = propertyIdBySlug.get("rebuilt-cottage-with-a-wraparound-porch-austin");
+    const lucas = additionalAgents[2]!;
+    const day = 86_400_000;
+    const baseTime = Date.now();
+
+    const auditEntries: Array<Partial<AuditLog>> = [];
+
+    if (submitted) {
+      auditEntries.push({
+        actor: admin._id,
+        action: "property.submitted",
+        entity: "Property",
+        entityId: submitted,
+        before: { status: "draft" },
+        after: { status: "pending" },
+        ip: "127.0.0.1",
+        createdAt: new Date(baseTime - 5 * day),
+      });
+    }
+
+    if (approved) {
+      auditEntries.push({
+        actor: admin._id,
+        action: "property.approved",
+        entity: "Property",
+        entityId: approved,
+        before: { status: "pending" },
+        after: { status: "approved" },
+        ip: "127.0.0.1",
+        createdAt: new Date(baseTime - 4 * day),
+      });
+    }
+
+    if (rejected) {
+      auditEntries.push({
+        actor: admin._id,
+        action: "property.rejected",
+        entity: "Property",
+        entityId: rejected,
+        before: { status: "pending" },
+        after: { status: "rejected" },
+        reason: {
+          category: "poor_photos",
+          note: "Exterior photos were unclear. Please add daylight shots of the front and yard.",
+        },
+        ip: "127.0.0.1",
+        createdAt: new Date(baseTime - 3 * day),
+      });
+    }
+
+    auditEntries.push({
+      actor: admin._id,
+      action: "user.suspended",
+      entity: "User",
+      entityId: lucas._id,
+      before: { status: "active" },
+      after: { status: "suspended" },
+      reason: { category: "moderation", note: "Listing policy review." },
+      ip: "127.0.0.1",
+      createdAt: new Date(baseTime - 2 * day),
+    });
+
+    auditEntries.push({
+      actor: admin._id,
+      action: "user.reactivated",
+      entity: "User",
+      entityId: lucas._id,
+      before: { status: "suspended" },
+      after: { status: "active" },
+      ip: "127.0.0.1",
+      createdAt: new Date(baseTime - 1.5 * day),
+    });
+
+    auditEntries.push({
+      actor: admin._id,
+      action: "agent.verified",
+      entity: "AgentProfile",
+      entityId: agent._id,
+      before: { verified: false },
+      after: { verified: true },
+      ip: "127.0.0.1",
+      createdAt: new Date(baseTime - day),
+    });
+
+    await AuditLogModel.create(auditEntries);
+    logger.warn({ entries: auditEntries.length }, "Seeded development audit log entries");
   }
 
   logger.warn(

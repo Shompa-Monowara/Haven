@@ -26,6 +26,9 @@ export function useAdminListings(filters: {
   listingType?: string;
   propertyType?: string;
   city?: string;
+  agent?: string;
+  from?: string;
+  to?: string;
   page?: number;
 }) {
   const params = new URLSearchParams();
@@ -34,8 +37,11 @@ export function useAdminListings(filters: {
   if (filters.listingType) params.set("listingType", filters.listingType);
   if (filters.propertyType) params.set("propertyType", filters.propertyType);
   if (filters.city) params.set("city", filters.city);
+  if (filters.agent) params.set("agent", filters.agent);
+  if (filters.from) params.set("from", filters.from);
+  if (filters.to) params.set("to", filters.to);
   params.set("page", String(filters.page ?? 1));
-  params.set("limit", "24");
+  params.set("limit", "10");
 
   return useQuery({
     queryKey: adminKeys.listings(Object.fromEntries(params)),
@@ -68,7 +74,7 @@ export function useAdminUsers(filters: {
   if (filters.status) params.set("status", filters.status);
   if (filters.q) params.set("q", filters.q);
   params.set("page", String(filters.page ?? 1));
-  params.set("limit", "24");
+  params.set("limit", "10");
 
   return useQuery({
     queryKey: adminKeys.users(Object.fromEntries(params)),
@@ -88,7 +94,7 @@ export function useAdminAudit(filters: {
   const params = new URLSearchParams();
   if (filters.entity) params.set("entity", filters.entity);
   params.set("page", String(filters.page ?? 1));
-  params.set("limit", "30");
+  params.set("limit", "20");
 
   return useQuery({
     queryKey: adminKeys.audit(Object.fromEntries(params)),

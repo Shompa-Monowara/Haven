@@ -234,6 +234,7 @@ export function MessagesPage() {
     if (!selected.length) return;
 
     const formData = new FormData();
+    if (conversationId) formData.append("conversationId", conversationId);
     selected.forEach((file) => formData.append("files", file));
     setUploading(true);
 

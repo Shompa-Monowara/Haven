@@ -870,6 +870,7 @@ export function ListingWizardPage() {
                 onChange={setImages}
                 titleHint={values.title || "Listing photo"}
                 disabled={readOnly}
+                propertyId={propertyId}
               />
             </div>
           ) : null}

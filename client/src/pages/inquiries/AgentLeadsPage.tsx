@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Mail, MapPin, Phone, Users } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { toast } from "react-toastify";
 
@@ -13,10 +13,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Pagination } from "@/components/ui/pagination";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ApiClientError, api } from "@/lib/api";
 import { formatRelativeDate } from "@/lib/format";
-import { useInquiries } from "@/lib/queries/engagement";
+import { useInquiries, useInquiriesPage } from "@/lib/queries/engagement";
+import { usePageParam } from "@/lib/use-page-param";
 import { cn } from "@/lib/utils";
 import { contactTopicLabels } from "@/types/agent";
 import {
@@ -35,6 +37,8 @@ const filters: Array<{ value: "all" | InquiryStatus; label: string }> = [
   { value: "spam", label: "Spam" },
 ];
 
+const INQUIRIES_PAGE_SIZE = 10;
+
 export function AgentLeadsPage({
   title = "Leads",
   description = "Inquiries from buyers, with contact details, notes, and a status you can move forward.",
@@ -43,17 +47,45 @@ export function AgentLeadsPage({
   description?: string;
 } = {}) {
   const queryClient = useQueryClient();
-  const inquiries = useInquiries();
+  const [page, setPage] = usePageParam();
+  const countsQuery = useInquiries();
   const [filter, setFilter] = useState<"all" | InquiryStatus>("all");
   const [selected, setSelected] = useState<InquiryDto | null>(null);
   const [status, setStatus] = useState<InquiryStatus>("new");
   const [note, setNote] = useState("");
+  const listRef = useRef<HTMLDivElement | null>(null);
 
-  const items = inquiries.data ?? [];
-  const filtered = useMemo(
-    () => (filter === "all" ? items : items.filter((item) => item.status === filter)),
-    [filter, items],
-  );
+  const allItems = countsQuery.data ?? [];
+  const paged = useInquiriesPage({
+    status: filter === "all" ? undefined : filter,
+    page,
+    limit: INQUIRIES_PAGE_SIZE,
+  });
+  const items = paged.data?.data ?? [];
+  const meta = paged.data?.meta;
+
+  useEffect(() => {
+    if (!meta) return;
+    const lastPage = Math.max(1, meta.totalPages);
+    if (page > lastPage) setPage(lastPage, { replace: true });
+  }, [meta, page, setPage]);
+
+  function resetPage() {
+    if (page !== 1) setPage(1);
+  }
+
+  function changeFilter(next: "all" | InquiryStatus) {
+    setFilter(next);
+    resetPage();
+  }
+
+  function goToPage(next: number) {
+    setPage(next);
+    const element = listRef.current;
+    if (!element) return;
+    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    element.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "start" });
+  }
 
   function open(inquiry: InquiryDto) {
     setSelected(inquiry);
@@ -91,7 +123,7 @@ export function AgentLeadsPage({
           <button
             key={option.value}
             type="button"
-            onClick={() => setFilter(option.value)}
+            onClick={() => changeFilter(option.value)}
             aria-pressed={filter === option.value}
             className={cn(
               "h-9 rounded-pill border px-3 text-xs font-medium transition-colors",
@@ -103,21 +135,21 @@ export function AgentLeadsPage({
             {option.label}
             <span className="ml-1.5 text-muted tabular">
               {option.value === "all"
-                ? items.length
-                : items.filter((item) => item.status === option.value).length}
+                ? allItems.length
+                : allItems.filter((item) => item.status === option.value).length}
             </span>
           </button>
         ))}
       </div>
 
-      {inquiries.isPending ? (
+      {paged.isPending ? (
         <div className="space-y-3 rounded-lg border border-line bg-surface p-4">
           {Array.from({ length: 4 }).map((_, index) => (
             <Skeleton key={index} className="h-14 w-full" />
           ))}
         </div>
-      ) : filtered.length ? (
-        <div className="overflow-hidden rounded-lg border border-line bg-surface">
+      ) : items.length ? (
+        <div ref={listRef} className="overflow-hidden rounded-lg border border-line bg-surface">
           <div className="overflow-x-auto">
             <table className="w-full min-w-[760px] border-collapse text-left text-sm">
               <caption className="sr-only">Buyer inquiries</caption>
@@ -131,7 +163,7 @@ export function AgentLeadsPage({
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((inquiry) => (
+                {items.map((inquiry) => (
                   <tr key={inquiry.id} className="border-b border-line align-middle last:border-0">
                     <td className="px-4 py-3">
                       <p className="flex items-center gap-1.5 font-medium text-heading">
@@ -187,15 +219,24 @@ export function AgentLeadsPage({
             <Users className="h-5 w-5" aria-hidden="true" />
           </span>
           <h3 className="mt-3 text-lg font-semibold text-heading">
-            {items.length ? "No leads with this status" : "No leads yet"}
+            {allItems.length ? "No leads with this status" : "No leads yet"}
           </h3>
           <p className="mt-1 max-w-sm text-sm text-body">
-            {items.length
+            {allItems.length
               ? "Choose another status to see more of your inquiries."
               : "Inquiries from your listings appear here with contact details and notes."}
           </p>
         </div>
       )}
+
+      <Pagination
+        page={meta?.page ?? page}
+        totalPages={meta?.totalPages ?? 1}
+        total={meta?.total ?? 0}
+        limit={meta?.limit ?? INQUIRIES_PAGE_SIZE}
+        label="Lead pages"
+        onPageChange={goToPage}
+      />
 
       <Dialog open={Boolean(selected)} onOpenChange={(open) => !open && setSelected(null)}>
         <DialogContent className="max-h-[90vh] max-w-lg overflow-y-auto">

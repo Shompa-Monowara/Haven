@@ -68,7 +68,15 @@ export function buildPublicPropertyFilter(
       const term = new RegExp(escapeRegex(query.q), "i");
       filter.$and = [
         ...((filter.$and as unknown[]) ?? []),
-        { $or: [{ title: term }, { "address.city": term }, { "address.neighborhood": term }] },
+        {
+          $or: [
+            { title: term },
+            { "address.city": term },
+            { "address.neighborhood": term },
+            { "address.zip": term },
+            { "address.street": term },
+          ],
+        },
       ];
     }
   }

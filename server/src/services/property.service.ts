@@ -5,7 +5,7 @@ import { env } from "../config/env";
 import { ApiError } from "../lib/api-error";
 import { sendListingDecisionEmail } from "../lib/email";
 import { buildPublicPropertyFilter, escapeRegex } from "../lib/property-filter";
-import { deleteLocalUploads } from "../lib/uploads";
+import { deleteUploads } from "../lib/uploads";
 import { createNotification, createNotifications } from "./notification.service";
 import { notifyInstantMatches } from "./saved-search.service";
 
@@ -225,7 +225,11 @@ export async function updateProperty(
   }
 
   const before = materialSnapshot(property);
-  const previousImageUrls = property.images.map((image) => image.url);
+  // Track both IDs and URLs so deletion works for Cloudinary (publicId) and
+  // legacy/imported images that only have a URL.
+  const previousImageItems = property.images
+    .flatMap((image) => [image.publicId, image.url])
+    .filter((value): value is string => Boolean(value));
   const material = hasMaterialChange(property, input);
   const descriptionChanged =
     input.description !== undefined && input.description !== property.description;
@@ -272,8 +276,12 @@ export async function updateProperty(
   await property.save();
 
   if (input.images !== undefined) {
-    const currentUrls = new Set(property.images.map((image) => image.url));
-    await deleteLocalUploads(previousImageUrls.filter((url) => !currentUrls.has(url)));
+    const currentItems = new Set(
+      property.images
+        .flatMap((image) => [image.publicId, image.url])
+        .filter((value): value is string => Boolean(value)),
+    );
+    await deleteUploads(previousImageItems.filter((item) => !currentItems.has(item)));
   }
 
   if (material || descriptionChanged) {
@@ -405,9 +413,11 @@ export async function deleteDraft(property: PropertyDocument, viewer: Viewer) {
     throw ApiError.conflict("Only drafts can be deleted");
   }
 
-  const imageUrls = property.images.map((image) => image.url);
+  const imageItems = property.images
+    .flatMap((image) => [image.publicId, image.url])
+    .filter((value): value is string => Boolean(value));
   await property.deleteOne();
-  await deleteLocalUploads(imageUrls);
+  await deleteUploads(imageItems);
 }
 
 export async function decideProperty(
@@ -627,9 +637,20 @@ export async function listSimilarProperties(property: PropertyDocument, limit = 
   );
 }
 
-export async function listAdminProperties(query: PropertyListQuery, status?: PropertyStatus) {
+export async function listAdminProperties(
+  query: PropertyListQuery,
+  status?: PropertyStatus,
+  options: { agent?: string; from?: Date; to?: Date } = {},
+) {
   const filter: Record<string, unknown> = {};
   if (status) filter.status = status;
+  if (options.agent) filter.agent = options.agent;
+  if (options.from || options.to) {
+    const createdAt: Record<string, Date> = {};
+    if (options.from) createdAt.$gte = options.from;
+    if (options.to) createdAt.$lte = options.to;
+    filter.createdAt = createdAt;
+  }
   if (query.q) {
     const term = new RegExp(escapeRegex(query.q), "i");
     const matchingAgents = await UserModel.find({
@@ -710,5 +731,21 @@ export async function listCityCounts() {
   ]);
 
   return rows.map((row) => ({ city: row._id, count: row.count }));
+}
+
+export async function listPropertyTypeCounts() {
+  const rows = await PropertyModel.aggregate<{ _id: string; count: number }>([
+    {
+      $match: {
+        status: "approved",
+        hiddenBySuspension: { $ne: true },
+        propertyType: { $nin: [null, ""] },
+      },
+    },
+    { $group: { _id: "$propertyType", count: { $sum: 1 } } },
+    { $sort: { count: -1, _id: 1 } },
+  ]);
+
+  return rows.map((row) => ({ propertyType: row._id, count: row.count }));
 }
 

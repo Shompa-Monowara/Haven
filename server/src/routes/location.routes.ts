@@ -2,7 +2,11 @@ import { Router } from "express";
 import { z } from "zod";
 
 import { asyncHandler } from "../lib/async-handler";
-import { listCityCounts, listNeighborhoodCounts } from "../services/property.service";
+import {
+  listCityCounts,
+  listNeighborhoodCounts,
+  listPropertyTypeCounts,
+} from "../services/property.service";
 
 export const locationRouter = Router();
 
@@ -11,6 +15,13 @@ locationRouter.get(
   asyncHandler(async (_req, res) => {
     const cities = await listCityCounts();
     res.json({ data: cities });
+  }),
+);
+
+locationRouter.get(
+  "/property-types",
+  asyncHandler(async (_req, res) => {
+    res.json({ data: await listPropertyTypeCounts() });
   }),
 );
 

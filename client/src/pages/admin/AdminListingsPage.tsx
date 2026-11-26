@@ -1,14 +1,17 @@
 import { Search } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 
 import { AdminListingDrawer } from "@/components/admin/AdminListingDrawer";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Pagination } from "@/components/ui/pagination";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatPrice, formatRelativeDate, formatRent } from "@/lib/format";
 import { useAdminListings } from "@/lib/queries/admin";
+import { usePageParam } from "@/lib/use-page-param";
+import { cn } from "@/lib/utils";
 import {
   coverImage,
   statusLabels,
@@ -36,11 +39,30 @@ function priceLabel(property: PropertySummary) {
 export function AdminListingsPage() {
   const [status, setStatus] = useState<PropertyStatus | "all">("all");
   const [q, setQ] = useState("");
-  const [page, setPage] = useState(1);
+  const [page, setPage] = usePageParam();
   const [drawerId, setDrawerId] = useState<string | null>(null);
   const listings = useAdminListings({ status, q, page });
   const items = listings.data?.data ?? [];
   const meta = listings.data?.meta;
+  const listRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!meta) return;
+    const lastPage = Math.max(1, meta.totalPages);
+    if (page > lastPage) setPage(lastPage, { replace: true });
+  }, [meta, page, setPage]);
+
+  function resetPage() {
+    if (page !== 1) setPage(1);
+  }
+
+  function goToPage(next: number) {
+    setPage(next);
+    const element = listRef.current;
+    if (!element) return;
+    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    element.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "start" });
+  }
 
   return (
     <div className="space-y-5">
@@ -58,7 +80,7 @@ export function AdminListingsPage() {
             value={q}
             onChange={(event) => {
               setQ(event.target.value);
-              setPage(1);
+              resetPage();
             }}
             placeholder="Search title or city"
             aria-label="Search listings"
@@ -69,7 +91,7 @@ export function AdminListingsPage() {
           value={status}
           onChange={(event) => {
             setStatus(event.target.value as PropertyStatus | "all");
-            setPage(1);
+            resetPage();
           }}
           aria-label="Filter by status"
           className="h-10 rounded-md border border-line bg-surface px-3 text-sm text-heading sm:w-52"
@@ -89,7 +111,13 @@ export function AdminListingsPage() {
           ))}
         </div>
       ) : items.length ? (
-        <div className="overflow-hidden rounded-lg border border-line bg-surface">
+        <div
+          ref={listRef}
+          className={cn(
+            "overflow-hidden rounded-lg border border-line bg-surface",
+            listings.isFetching && "opacity-60 transition-opacity",
+          )}
+        >
           <div className="overflow-x-auto">
             <table className="w-full min-w-[880px] border-collapse text-left text-sm">
               <caption className="sr-only">All platform listings</caption>
@@ -158,19 +186,14 @@ export function AdminListingsPage() {
         </div>
       )}
 
-      {meta && meta.totalPages > 1 ? (
-        <div className="flex items-center justify-between text-sm text-body">
-          <p>Page {meta.page} of {meta.totalPages}</p>
-          <div className="flex gap-2">
-            <Button variant="outline" size="sm" disabled={meta.page <= 1} onClick={() => setPage((p) => p - 1)}>
-              Previous
-            </Button>
-            <Button variant="outline" size="sm" disabled={meta.page >= meta.totalPages} onClick={() => setPage((p) => p + 1)}>
-              Next
-            </Button>
-          </div>
-        </div>
-      ) : null}
+      <Pagination
+        page={meta?.page ?? page}
+        totalPages={meta?.totalPages ?? 1}
+        total={meta?.total ?? 0}
+        limit={meta?.limit ?? 24}
+        label="Listings pages"
+        onPageChange={goToPage}
+      />
 
       <AdminListingDrawer
         listingId={drawerId}

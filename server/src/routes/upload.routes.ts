@@ -1,5 +1,4 @@
 import { randomUUID } from "node:crypto";
-import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import { Router } from "express";
@@ -10,7 +9,7 @@ import { ApiError } from "../lib/api-error";
 import { asyncHandler } from "../lib/async-handler";
 import { validateImage } from "../lib/images";
 import { toUserDto } from "../lib/serializers";
-import { deleteLocalUploads, UPLOAD_ROOT } from "../lib/uploads";
+import { deleteUploads, saveImage, saveRawFile, UPLOAD_ROOT } from "../lib/uploads";
 import { UserModel } from "../models/user.model";
 import { requireAuth, requireRole } from "../middleware/auth";
 import { userRateLimit } from "../middleware/rate-limit";
@@ -117,6 +116,11 @@ const avatarLimiter = userRateLimit({
   message: "You are uploading too many photos. Please wait a few minutes and try again.",
 });
 
+/** Only use an id as a folder segment when it looks like a Mongo ObjectId. */
+function asObjectId(value: unknown): string | null {
+  return typeof value === "string" && /^[a-f0-9]{24}$/i.test(value) ? value : null;
+}
+
 uploadRouter.post(
   "/sign",
   requireAuth,
@@ -153,21 +157,19 @@ uploadRouter.post(
       throw ApiError.badRequest("This upload batch is too large (50MB maximum per request)");
     }
 
-    const directory = path.join(UPLOAD_ROOT, "properties", userId);
-    await mkdir(directory, { recursive: true });
+    // Prefer properties/<propertyId>/<uuid> once a draft exists; fall back to
+    // the user's folder while a brand-new listing has no id yet.
+    const propertyId = asObjectId(req.body.propertyId);
+    const folder = propertyId ? `properties/${propertyId}` : `properties/${userId}`;
 
-    const images = [];
+    const images: Array<{ url: string; publicId: string; size: number }> = [];
 
     for (const file of files) {
       const type = allowedTypes[file.mimetype]!;
       const fileName = `${randomUUID()}.${type.extension}`;
-      await writeFile(path.join(directory, fileName), file.buffer);
+      const stored = await saveImage(file.buffer, { folder, filename: fileName });
 
-      images.push({
-        url: `/uploads/properties/${userId}/${fileName}`,
-        publicId: `properties/${userId}/${fileName}`,
-        size: file.size,
-      });
+      images.push({ url: stored.url, publicId: stored.publicId, size: file.size });
     }
 
     res.status(201).json({ data: { images } });
@@ -210,19 +212,30 @@ uploadRouter.post(
       throw ApiError.badRequest("This attachment batch is too large (25MB maximum per message)");
     }
 
-    const directory = path.join(UPLOAD_ROOT, "chat", userId);
-    await mkdir(directory, { recursive: true });
+    const conversationId = asObjectId(req.body.conversationId);
+    const folder = conversationId ? `chat/${conversationId}` : `chat/${userId}`;
 
-    const attachments = [];
+    const attachments: Array<{
+      url: string;
+      publicId: string;
+      name: string;
+      type: string;
+      size: number;
+    }> = [];
 
     for (const file of files) {
       const type = chatAllowedTypes[file.mimetype]!;
       const fileName = `${randomUUID()}.${type.extension}`;
-      await writeFile(path.join(directory, fileName), file.buffer);
+      // Images go through the image pipeline; PDFs are stored as raw files
+      // (Cloudinary `raw`) so they survive redeploys without image transforms.
+      const stored =
+        file.mimetype === "application/pdf"
+          ? await saveRawFile(file.buffer, { folder, filename: fileName })
+          : await saveImage(file.buffer, { folder, filename: fileName });
 
       attachments.push({
-        url: `/uploads/chat/${userId}/${fileName}`,
-        publicId: `chat/${userId}/${fileName}`,
+        url: stored.url,
+        publicId: stored.publicId,
         name: (path.basename(file.originalname) || "attachment").slice(0, 120),
         type: file.mimetype,
         size: file.size,
@@ -261,30 +274,32 @@ uploadRouter.post(
     const user = await UserModel.findById(req.auth!.id);
     if (!user) throw ApiError.unauthorized();
 
-    const directory = path.join(UPLOAD_ROOT, "avatars", user.id);
-    await mkdir(directory, { recursive: true });
-
-    const fileName = `${randomUUID()}.webp`;
-    const filePath = path.join(directory, fileName);
-
+    let processed: Buffer;
     try {
-      await sharp(file.buffer)
+      processed = await sharp(file.buffer)
         .rotate()
         .resize(400, 400, { fit: "cover", position: "centre" })
         .webp({ quality: 82 })
-        .toFile(filePath);
+        .toBuffer();
     } catch {
       throw ApiError.badRequest("That image could not be processed");
     }
 
-    const previous = user.avatar?.url;
-    user.avatar = {
-      url: `/uploads/avatars/${user.id}/${fileName}`,
-      publicId: `avatars/${user.id}/${fileName}`,
-    };
+    const fileName = `${randomUUID()}.webp`;
+    const stored = await saveImage(processed, {
+      folder: `avatars/${user.id}`,
+      filename: fileName,
+    });
+
+    // Snapshot the old references before reassigning: Mongoose nested paths can
+    // mutate in place, so reading `user.avatar` afterwards would point at the new file.
+    const previous = [user.avatar?.url, user.avatar?.publicId].filter(
+      (value): value is string => Boolean(value),
+    );
+    user.avatar = { url: stored.url, publicId: stored.publicId };
     await user.save();
 
-    if (previous) await deleteLocalUploads([previous]);
+    if (previous.length) await deleteUploads(previous);
 
     res.status(201).json({ data: { user: toUserDto(user) } });
   }),
@@ -297,11 +312,13 @@ uploadRouter.delete(
     const user = await UserModel.findById(req.auth!.id);
     if (!user) throw ApiError.unauthorized();
 
-    const previous = user.avatar?.url;
+    const previous = [user.avatar?.url, user.avatar?.publicId].filter(
+      (value): value is string => Boolean(value),
+    );
     user.avatar = undefined;
     await user.save();
 
-    if (previous) await deleteLocalUploads([previous]);
+    if (previous.length) await deleteUploads(previous);
 
     res.json({ data: { user: toUserDto(user) } });
   }),

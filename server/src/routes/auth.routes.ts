@@ -11,6 +11,7 @@ import {
   setRefreshCookie,
   sessionMeta,
 } from "../lib/cookies";
+import { sendPasswordResetEmail } from "../lib/email";
 import { logger } from "../lib/logger";
 import { toAgentProfileDto, toUserDto } from "../lib/serializers";
 import { requireAuth } from "../middleware/auth";
@@ -214,7 +215,7 @@ authRouter.post(
   resetLimiter,
   asyncHandler(async (req, res) => {
     const { email } = forgotPasswordSchema.parse(req.body);
-    const user = await UserModel.findOne({ email }).select("_id email");
+    const user = await UserModel.findOne({ email }).select("_id email name");
     const message = "If an account exists for that email, a reset link is on its way.";
 
     if (!user) {
@@ -231,12 +232,24 @@ authRouter.post(
     });
 
     const resetUrl = `${env.CORS_ORIGIN.split(",")[0]?.trim()}/reset-password?token=${token}`;
-    logger.info({ email: user.email, resetUrl }, "Password reset requested");
+
+    // Fire-and-forget so response timing does not reveal whether the account exists.
+    // The token and reset URL are never logged here; the email helper only prints the
+    // link to the console outside production (when SMTP is not configured).
+    void sendPasswordResetEmail({
+      to: user.email,
+      name: user.name,
+      resetUrl,
+      expiresInMinutes: RESET_TOKEN_TTL_MS / 60_000,
+    }).catch((error) => {
+      logger.error({ err: error }, "Failed to send password reset email");
+    });
 
     res.json({
       data: {
         message,
-        ...(env.NODE_ENV !== "production" ? { resetToken: token } : {}),
+        // Only expose the token to the test suite so it can exercise the full flow.
+        ...(env.NODE_ENV === "test" ? { resetToken: token } : {}),
       },
     });
   }),

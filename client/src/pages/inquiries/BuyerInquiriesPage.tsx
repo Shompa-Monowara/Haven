@@ -1,16 +1,39 @@
 import { Inbox, MapPin } from "lucide-react";
+import { useEffect, useRef } from "react";
 import { Link } from "react-router-dom";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Pagination } from "@/components/ui/pagination";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatRelativeDate } from "@/lib/format";
-import { useInquiries } from "@/lib/queries/engagement";
+import { useInquiriesPage } from "@/lib/queries/engagement";
+import { usePageParam } from "@/lib/use-page-param";
 import { contactTopicLabels } from "@/types/agent";
 import { inquiryStatusLabels, inquiryStatusTones } from "@/types/engagement";
 
+const INQUIRIES_PAGE_SIZE = 10;
+
 export function BuyerInquiriesPage() {
-  const inquiries = useInquiries();
+  const [page, setPage] = usePageParam();
+  const inquiries = useInquiriesPage({ page, limit: INQUIRIES_PAGE_SIZE });
+  const items = inquiries.data?.data ?? [];
+  const meta = inquiries.data?.meta;
+  const listRef = useRef<HTMLUListElement | null>(null);
+
+  useEffect(() => {
+    if (!meta) return;
+    const lastPage = Math.max(1, meta.totalPages);
+    if (page > lastPage) setPage(lastPage, { replace: true });
+  }, [meta, page, setPage]);
+
+  function goToPage(next: number) {
+    setPage(next);
+    const element = listRef.current;
+    if (!element) return;
+    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    element.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "start" });
+  }
 
   return (
     <div className="space-y-6">
@@ -32,9 +55,9 @@ export function BuyerInquiriesPage() {
             <Skeleton key={index} className="h-28 w-full rounded-lg" />
           ))}
         </div>
-      ) : inquiries.data?.length ? (
-        <ul className="space-y-3">
-          {inquiries.data.map((inquiry) => (
+      ) : items.length ? (
+        <ul ref={listRef} className="space-y-3">
+          {items.map((inquiry) => (
             <li key={inquiry.id} className="rounded-lg border border-line bg-surface p-4 sm:p-5">
               <div className="flex flex-wrap items-start gap-4">
                 {inquiry.property?.coverUrl ? (
@@ -97,6 +120,15 @@ export function BuyerInquiriesPage() {
           </Button>
         </div>
       )}
+
+      <Pagination
+        page={meta?.page ?? page}
+        totalPages={meta?.totalPages ?? 1}
+        total={meta?.total ?? 0}
+        limit={meta?.limit ?? INQUIRIES_PAGE_SIZE}
+        label="Inquiry pages"
+        onPageChange={goToPage}
+      />
     </div>
   );
 }

@@ -370,6 +370,76 @@ describe("listing lifecycle", () => {
     expect(invalid.status).toBe(400);
     expect(invalid.body.error.code).toBe("VALIDATION_ERROR");
   }, 30_000);
+
+  it("matches free-text q against city, neighborhood, and ZIP", async () => {
+    const app = createApp();
+    const token = await register(app, agentInput);
+    const adminToken = await createAdminToken(app);
+
+    const brooklyn = await createListing(app, token, {
+      images: [imageInput(0), imageInput(1), imageInput(2)],
+    });
+
+    const seattle = await createListing(app, token, {
+      title: "Seattle condo with water views",
+      price: 1_120_000,
+      address: {
+        street: "2607 Western Avenue",
+        city: "Seattle",
+        state: "WA",
+        zip: "98121",
+        country: "United States",
+        neighborhood: "Belltown",
+      },
+      location: { lat: 47.6062, lng: -122.3321 },
+      images: [imageInput(0), imageInput(1), imageInput(2)],
+    });
+
+    // Same Park Slope address as the approved listing but left pending, so it
+    // must never surface in a free-text search.
+    const pending = await createListing(app, token, {
+      title: "Pending Park Slope co-op",
+      images: [imageInput(0), imageInput(1), imageInput(2)],
+    });
+
+    for (const listing of [brooklyn, seattle]) {
+      await request(app)
+        .post(`/api/properties/${listing.id}/submit`)
+        .set("Authorization", `Bearer ${token}`);
+      const approved = await request(app)
+        .patch(`/api/admin/listings/${listing.id}/status`)
+        .set("Authorization", `Bearer ${adminToken}`)
+        .send({ status: "approved" });
+      expect(approved.status).toBe(200);
+    }
+
+    await request(app)
+      .post(`/api/properties/${pending.id}/submit`)
+      .set("Authorization", `Bearer ${token}`);
+
+    const byNeighborhood = await request(app).get(
+      `/api/properties?q=${encodeURIComponent("Park Slope")}`,
+    );
+    expect(byNeighborhood.status).toBe(200);
+    expect(byNeighborhood.body.data).toHaveLength(1);
+    expect(byNeighborhood.body.data[0].id).toBe(brooklyn.id);
+
+    const byZip = await request(app).get("/api/properties?q=11217");
+    expect(byZip.status).toBe(200);
+    expect(byZip.body.data).toHaveLength(1);
+    expect(byZip.body.data[0].id).toBe(brooklyn.id);
+
+    const byCity = await request(app).get(`/api/properties?q=${encodeURIComponent("Brooklyn")}`);
+    expect(byCity.status).toBe(200);
+    expect(byCity.body.data).toHaveLength(1);
+    expect(byCity.body.data[0].id).toBe(brooklyn.id);
+
+    for (const response of [byNeighborhood, byZip, byCity]) {
+      expect(
+        response.body.data.some((item: { id: string }) => item.id === pending.id),
+      ).toBe(false);
+    }
+  }, 30_000);
 });
 
 describe("uploads", () => {

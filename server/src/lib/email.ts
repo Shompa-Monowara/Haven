@@ -46,7 +46,8 @@ export async function sendMail(input: MailInput): Promise<void> {
         email: {
           to: input.to,
           subject: input.subject,
-          preview: input.text.slice(0, 240),
+          // Never log message bodies in production (they can contain reset links).
+          ...(env.NODE_ENV === "production" ? {} : { preview: input.text.slice(0, 240) }),
           transport: "console",
         },
       },
@@ -191,6 +192,27 @@ export async function sendAgentContactEmail(input: {
     ]
       .filter(Boolean)
       .join("\n"),
+  });
+}
+
+export async function sendPasswordResetEmail(input: {
+  to: string;
+  name: string;
+  resetUrl: string;
+  expiresInMinutes: number;
+}): Promise<void> {
+  await sendMail({
+    to: input.to,
+    subject: "Reset your Haven password",
+    text: [
+      `Hi ${input.name},`,
+      "",
+      `Reset your Haven password (expires in ${input.expiresInMinutes} minutes):`,
+      "",
+      input.resetUrl,
+      "",
+      "If you did not request this, you can safely ignore this email.",
+    ].join("\n"),
   });
 }
 

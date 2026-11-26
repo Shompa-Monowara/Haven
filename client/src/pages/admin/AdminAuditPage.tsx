@@ -1,11 +1,14 @@
 import { ScrollText } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Pagination } from "@/components/ui/pagination";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatRelativeDate } from "@/lib/format";
 import { useAdminAudit } from "@/lib/queries/admin";
+import { usePageParam } from "@/lib/use-page-param";
+import { cn } from "@/lib/utils";
 import { auditActionLabels } from "@/types/admin";
 
 function statusValue(value: unknown) {
@@ -17,10 +20,29 @@ function statusValue(value: unknown) {
 
 export function AdminAuditPage() {
   const [entity, setEntity] = useState<"" | "Property" | "User" | "AgentProfile">("");
-  const [page, setPage] = useState(1);
+  const [page, setPage] = usePageParam();
   const audit = useAdminAudit({ entity: entity || undefined, page });
   const items = audit.data?.data ?? [];
   const meta = audit.data?.meta;
+  const listRef = useRef<HTMLOListElement | null>(null);
+
+  useEffect(() => {
+    if (!meta) return;
+    const lastPage = Math.max(1, meta.totalPages);
+    if (page > lastPage) setPage(lastPage, { replace: true });
+  }, [meta, page, setPage]);
+
+  function resetPage() {
+    if (page !== 1) setPage(1);
+  }
+
+  function goToPage(next: number) {
+    setPage(next);
+    const element = listRef.current;
+    if (!element) return;
+    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    element.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "start" });
+  }
 
   return (
     <div className="space-y-5">
@@ -37,7 +59,7 @@ export function AdminAuditPage() {
           value={entity}
           onChange={(event) => {
             setEntity(event.target.value as typeof entity);
-            setPage(1);
+            resetPage();
           }}
           aria-label="Filter audit entries by entity"
           className="h-10 rounded-md border border-line bg-surface px-3 text-sm text-heading"
@@ -55,8 +77,19 @@ export function AdminAuditPage() {
             <Skeleton key={index} className="h-12 w-full" />
           ))}
         </div>
+      ) : audit.isError ? (
+        <div className="rounded-lg border border-line bg-surface p-8 text-center">
+          <p className="font-medium text-heading">Audit log could not load</p>
+          <p className="mt-1 text-sm text-body">Check the connection and try again.</p>
+          <Button variant="outline" className="mt-4" onClick={() => audit.refetch()}>
+            Try again
+          </Button>
+        </div>
       ) : items.length ? (
-        <ol className="space-y-2">
+        <ol
+          ref={listRef}
+          className={cn("space-y-2", audit.isFetching && "opacity-60 transition-opacity")}
+        >
           {items.map((entry) => {
             const before = statusValue(entry.before);
             const after = statusValue(entry.after);
@@ -103,19 +136,14 @@ export function AdminAuditPage() {
         </div>
       )}
 
-      {meta && meta.totalPages > 1 ? (
-        <div className="flex items-center justify-between text-sm text-body">
-          <p>Page {meta.page} of {meta.totalPages}</p>
-          <div className="flex gap-2">
-            <Button variant="outline" size="sm" disabled={meta.page <= 1} onClick={() => setPage((p) => p - 1)}>
-              Previous
-            </Button>
-            <Button variant="outline" size="sm" disabled={meta.page >= meta.totalPages} onClick={() => setPage((p) => p + 1)}>
-              Next
-            </Button>
-          </div>
-        </div>
-      ) : null}
+      <Pagination
+        page={meta?.page ?? page}
+        totalPages={meta?.totalPages ?? 1}
+        total={meta?.total ?? 0}
+        limit={meta?.limit ?? 30}
+        label="Audit log pages"
+        onPageChange={goToPage}
+      />
     </div>
   );
 }

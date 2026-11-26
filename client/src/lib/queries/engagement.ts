@@ -56,6 +56,28 @@ export function useInquiries(status?: InquiryStatus) {
   });
 }
 
+export interface InquiriesPageArgs {
+  status?: InquiryStatus;
+  page: number;
+  limit: number;
+}
+
+export function useInquiriesPage({ status, page, limit }: InquiriesPageArgs) {
+  const authenticated = useAuthStore((state) => state.status === "authenticated");
+
+  const params = new URLSearchParams();
+  if (status) params.set("status", status);
+  params.set("page", String(page));
+  params.set("limit", String(limit));
+
+  return useQuery({
+    queryKey: [...engagementKeys.inquiries(status), page, limit],
+    queryFn: () => api.getPage<InquiryDto[]>(`/inquiries?${params.toString()}`),
+    enabled: authenticated,
+    placeholderData: (previous) => previous,
+  });
+}
+
 export function useConversations() {
   const authenticated = useAuthStore((state) => state.status === "authenticated");
 

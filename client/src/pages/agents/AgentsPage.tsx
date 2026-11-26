@@ -8,21 +8,53 @@ import { Avatar } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { usePublicAgent, usePublicAgents } from "@/lib/queries/agents";
 import { ApiClientError } from "@/lib/api";
 
+type AgentSort = "listings" | "recent" | "name";
+
+const agentSortOptions: Array<{ value: AgentSort; label: string }> = [
+  { value: "listings", label: "Most listings" },
+  { value: "recent", label: "Recently active" },
+  { value: "name", label: "A–Z" },
+];
+
 export function AgentsPage() {
   const { data, isPending, isError, refetch } = usePublicAgents();
   const [q, setQ] = useState("");
+  const [city, setCity] = useState("all");
+  const [sort, setSort] = useState<AgentSort>("listings");
+
+  const cities = useMemo(() => {
+    const unique = new Set<string>();
+    for (const agent of data ?? []) {
+      for (const area of agent.serviceAreas) unique.add(area);
+    }
+    return [...unique].sort((a, b) => a.localeCompare(b));
+  }, [data]);
 
   const agents = useMemo(() => {
     const term = q.trim().toLowerCase();
-    if (!term) return data ?? [];
-    return (data ?? []).filter((agent) =>
-      [agent.name, agent.agency, ...agent.serviceAreas].join(" ").toLowerCase().includes(term),
-    );
-  }, [data, q]);
+    const filtered = (data ?? []).filter((agent) => {
+      const matchesTerm =
+        !term ||
+        [agent.name, agent.agency, ...agent.serviceAreas].join(" ").toLowerCase().includes(term);
+      const matchesCity =
+        city === "all" ||
+        agent.serviceAreas.some((area) => area.toLowerCase() === city.toLowerCase());
+      return matchesTerm && matchesCity;
+    });
+
+    return [...filtered].sort((a, b) => {
+      if (sort === "name") return a.name.localeCompare(b.name);
+      if (sort === "recent") {
+        return new Date(b.lastActiveAt).getTime() - new Date(a.lastActiveAt).getTime();
+      }
+      return b.listingCount - a.listingCount;
+    });
+  }, [data, q, city, sort]);
 
   return (
     <>
@@ -44,15 +76,44 @@ export function AgentsPage() {
             times, and the homes they represent.
           </p>
 
-          <div className="relative mt-6 max-w-md">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" aria-hidden="true" />
-            <Input
-              value={q}
-              onChange={(event) => setQ(event.target.value)}
-              placeholder="Search name, agency, or city"
-              aria-label="Search agents"
-              className="h-11 pl-9"
-            />
+          <div className="mt-6 flex flex-wrap items-center gap-3">
+            <div className="relative w-full max-w-md flex-1">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" aria-hidden="true" />
+              <Input
+                value={q}
+                onChange={(event) => setQ(event.target.value)}
+                placeholder="Search name, agency, or city"
+                aria-label="Search agents"
+                className="h-11 pl-9"
+              />
+            </div>
+
+            <Select
+              value={city}
+              onChange={(event) => setCity(event.target.value)}
+              aria-label="Filter agents by city"
+              className="h-11 w-auto min-w-[10rem]"
+            >
+              <option value="all">All cities</option>
+              {cities.map((option) => (
+                <option key={option} value={option}>
+                  {option}
+                </option>
+              ))}
+            </Select>
+
+            <Select
+              value={sort}
+              onChange={(event) => setSort(event.target.value as AgentSort)}
+              aria-label="Sort agents"
+              className="h-11 w-auto min-w-[10rem]"
+            >
+              {agentSortOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </Select>
           </div>
         </div>
       </div>
@@ -133,8 +194,20 @@ export function AgentsPage() {
           </ul>
         ) : (
           <div className="rounded-lg border border-dashed border-line bg-canvas px-6 py-16 text-center">
-            <p className="font-medium text-heading">No agents match that search</p>
+            <p className="font-medium text-heading">No agents match these filters</p>
             <p className="mt-1 text-sm text-body">Try a different name, agency, or city.</p>
+            {q || city !== "all" ? (
+              <Button
+                variant="outline"
+                className="mt-4"
+                onClick={() => {
+                  setQ("");
+                  setCity("all");
+                }}
+              >
+                Clear filters
+              </Button>
+            ) : null}
           </div>
         )}
       </div>

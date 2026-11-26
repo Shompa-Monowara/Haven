@@ -150,7 +150,25 @@ adminPropertyRouter.get(
   asyncHandler(async (req, res) => {
     const query = propertyListQuerySchema.parse(req.query);
     const status = z.enum(PROPERTY_STATUSES).optional().parse(req.query.status);
-    const { items, meta } = await listAdminProperties(query, status);
+    const extra = z
+      .object({
+        agent: z.string().trim().regex(/^[a-f0-9]{24}$/i, "Invalid agent").optional(),
+        from: z.string().trim().optional(),
+        to: z.string().trim().optional(),
+      })
+      .parse({ agent: req.query.agent, from: req.query.from, to: req.query.to });
+
+    const toDate = (value?: string) => {
+      if (!value) return undefined;
+      const date = new Date(value);
+      return Number.isNaN(date.getTime()) ? undefined : date;
+    };
+
+    const { items, meta } = await listAdminProperties(query, status, {
+      agent: extra.agent,
+      from: toDate(extra.from),
+      to: toDate(extra.to),
+    });
     res.json({ data: items, meta });
   }),
 );

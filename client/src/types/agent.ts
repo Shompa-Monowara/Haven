@@ -10,6 +10,7 @@ export interface PublicAgent {
   responseTimeMinutes: number;
   serviceAreas: string[];
   listingCount: number;
+  lastActiveAt: string;
 }
 
 export interface PublicAgentProfile {

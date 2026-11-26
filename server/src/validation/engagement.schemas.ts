@@ -62,6 +62,7 @@ export const contactAgentSchema = z
       .max(2000, "Keep your message under 2,000 characters"),
     propertyId: z.string().trim().min(1).optional(),
     consent: z.literal(true, { error: "Accept the privacy policy to send your message" }),
+    website: z.string().optional(),
   })
   .superRefine((value, ctx) => {
     if (value.phone && !isReasonablePhone(value.phone)) {

@@ -198,14 +198,7 @@ export function App() {
 
         <Route path="properties" element={<PropertiesPage />} />
         <Route path="properties/:slug" element={<PropertyDetailPage />} />
-        <Route
-          path="agents"
-          element={
-            <ProtectedRoute roles={["buyer", "agent", "admin"]}>
-              <AgentsPage />
-            </ProtectedRoute>
-          }
-        />
+        <Route path="agents" element={<AgentsPage />} />
         <Route
           path="agents/:id/contact"
           element={
@@ -214,14 +207,7 @@ export function App() {
             </ProtectedRoute>
           }
         />
-        <Route
-          path="agents/:id"
-          element={
-            <ProtectedRoute roles={["buyer", "agent", "admin"]}>
-              <AgentProfilePage />
-            </ProtectedRoute>
-          }
-        />
+        <Route path="agents/:id" element={<AgentProfilePage />} />
         <Route path="list-property" element={<ListPropertyPage />} />
         <Route
           path="favorites"

@@ -6,6 +6,7 @@ import "react-toastify/dist/ReactToastify.css";
 
 import { App } from "@/App";
 import { AuthProvider } from "@/components/auth/AuthProvider";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { RealtimeProvider } from "@/components/realtime/RealtimeProvider";
 import { ToastHost } from "@/components/ui/toast-host";
 import "@/styles/globals.css";
@@ -30,11 +31,13 @@ createRoot(rootElement).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
-        <AuthProvider>
-          <RealtimeProvider>
-            <App />
-          </RealtimeProvider>
-        </AuthProvider>
+        <ErrorBoundary>
+          <AuthProvider>
+            <RealtimeProvider>
+              <App />
+            </RealtimeProvider>
+          </AuthProvider>
+        </ErrorBoundary>
         <ToastHost />
       </BrowserRouter>
     </QueryClientProvider>

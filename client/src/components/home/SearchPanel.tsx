@@ -96,7 +96,7 @@ export function SearchPanel() {
     const params = new URLSearchParams();
 
     if (tab !== "all") params.set("listingType", tab);
-    if (location.trim()) params.set("city", location.trim());
+    if (location.trim()) params.set("q", location.trim());
     if (propertyType) params.set("propertyType", propertyType);
     if (beds !== "Any") params.set("beds", beds.replace("+", ""));
 

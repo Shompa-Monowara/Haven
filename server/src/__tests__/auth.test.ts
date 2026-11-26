@@ -4,13 +4,22 @@ import mongoose from "mongoose";
 
 import { resetDatabase } from "./helpers";
 import request from "supertest";
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createApp } from "../app";
 import { connectDatabase, disconnectDatabase } from "../config/db";
 import { errorHandler } from "../middleware/error";
 import { requireAuth, requireRole } from "../middleware/auth";
 import { UserModel } from "../models/user.model";
+
+const { sendPasswordResetEmailMock } = vi.hoisted(() => ({
+  sendPasswordResetEmailMock: vi.fn(),
+}));
+
+vi.mock("../lib/email", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../lib/email")>();
+  return { ...actual, sendPasswordResetEmail: sendPasswordResetEmailMock };
+});
 
 let memoryServer: MongoMemoryServer;
 
@@ -35,6 +44,11 @@ afterAll(async () => {
 
 beforeEach(async () => {
   await resetDatabase();
+});
+
+beforeEach(() => {
+  sendPasswordResetEmailMock.mockReset();
+  sendPasswordResetEmailMock.mockResolvedValue(undefined);
 });
 
 describe("POST /api/auth/register", () => {
@@ -164,7 +178,7 @@ describe("login, session refresh, and logout", () => {
 });
 
 describe("password reset", () => {
-  it("issues a reset token in non-production and updates the password", async () => {
+  it("issues a reset token in the test environment and updates the password", async () => {
     const app = createApp();
     await request(app).post("/api/auth/register").send(buyer);
 
@@ -183,6 +197,34 @@ describe("password reset", () => {
       .send({ email: buyer.email, password: "NewHaven123" });
 
     expect(login.status).toBe(200);
+  });
+
+  it("returns the same message for unknown emails and only emails known accounts", async () => {
+    const app = createApp();
+    await request(app).post("/api/auth/register").send(buyer);
+
+    const known = await request(app).post("/api/auth/forgot-password").send({ email: buyer.email });
+    const unknown = await request(app)
+      .post("/api/auth/forgot-password")
+      .send({ email: "unknown@example.com" });
+
+    expect(known.status).toBe(200);
+    expect(unknown.status).toBe(200);
+    expect(known.body.data.message).toBe(unknown.body.data.message);
+    expect(known.body.data.message).toBe(
+      "If an account exists for that email, a reset link is on its way.",
+    );
+    expect(unknown.body.data.resetToken).toBeUndefined();
+
+    expect(sendPasswordResetEmailMock).toHaveBeenCalledTimes(1);
+    expect(sendPasswordResetEmailMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        to: buyer.email,
+        name: buyer.name,
+        expiresInMinutes: 30,
+        resetUrl: expect.stringContaining("token="),
+      }),
+    );
   });
 });
 

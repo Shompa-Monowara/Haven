@@ -13,6 +13,7 @@ import { Testimonials } from "@/components/home/Testimonials";
 import { Seo } from "@/components/seo/Seo";
 import { api } from "@/lib/api";
 import { usePublicAgents } from "@/lib/queries/agents";
+import { usePropertyTypeCounts } from "@/lib/queries/properties";
 import type { PropertySummary } from "@/types/property";
 import { Button } from "@/components/ui/button";
 import { DeferredSection } from "@/components/ui/deferred-section";
@@ -96,6 +97,11 @@ export function HomePage() {
     staleTime: 60_000,
   });
   const agentsQuery = usePublicAgents();
+  const typeCountsQuery = usePropertyTypeCounts();
+
+  const typeCounts = new Map(
+    (typeCountsQuery.data ?? []).map((entry) => [entry.propertyType.toLowerCase(), entry.count]),
+  );
 
   const totalListings = listingsQuery.data?.meta.total;
   const verifiedAgents = agentsQuery.data?.filter((agent) => agent.verified).length;
@@ -257,33 +263,41 @@ export function HomePage() {
           </div>
 
           <ul className="mt-8 grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-6">
-            {propertyTypes.map((type) => (
-              <li key={type.name}>
-                <Link
-                  to={type.href}
-                  className="group block overflow-hidden rounded-md border border-line bg-surface transition-shadow duration-200 hover:shadow-md"
-                >
-                  <span className="relative block aspect-[4/3] overflow-hidden">
-                    <img
-                      src={type.image}
-                      alt={`${type.name} listings`}
-                      loading="lazy"
-                      className="h-full w-full object-cover transition-transform duration-300 ease-out group-hover:scale-[1.04]"
-                    />
-                    <span className="absolute inset-0 bg-gradient-to-t from-ink/75 via-ink/10 to-transparent" />
-                    <span className="absolute inset-x-0 bottom-0 flex items-end justify-between gap-2 p-3">
-                      <span>
-                        <span className="block text-sm font-semibold text-white">{type.name}</span>
-                      </span>
-                      <ArrowUpRight
-                        className="h-4 w-4 shrink-0 -translate-y-0.5 text-white/0 transition-all duration-200 group-hover:text-white"
-                        aria-hidden="true"
+            {propertyTypes.map((type) => {
+              const count = typeCounts.get(type.name.toLowerCase());
+              return (
+                <li key={type.name}>
+                  <Link
+                    to={type.href}
+                    className="group block overflow-hidden rounded-md border border-line bg-surface transition-shadow duration-200 hover:shadow-md"
+                  >
+                    <span className="relative block aspect-[4/3] overflow-hidden">
+                      <img
+                        src={type.image}
+                        alt={`${type.name} listings`}
+                        loading="lazy"
+                        className="h-full w-full object-cover transition-transform duration-300 ease-out group-hover:scale-[1.04]"
                       />
+                      <span className="absolute inset-0 bg-gradient-to-t from-ink/75 via-ink/10 to-transparent" />
+                      <span className="absolute inset-x-0 bottom-0 flex items-end justify-between gap-2 p-3">
+                        <span>
+                          <span className="block text-sm font-semibold text-white">{type.name}</span>
+                          {typeof count === "number" ? (
+                            <span className="mt-0.5 block text-xs text-white/75">
+                              {count.toLocaleString("en-US")} {count === 1 ? "home" : "homes"}
+                            </span>
+                          ) : null}
+                        </span>
+                        <ArrowUpRight
+                          className="h-4 w-4 shrink-0 -translate-y-0.5 text-white/0 transition-all duration-200 group-hover:text-white"
+                          aria-hidden="true"
+                        />
+                      </span>
                     </span>
-                  </span>
-                </Link>
-              </li>
-            ))}
+                  </Link>
+                </li>
+              );
+            })}
           </ul>
         </div>
       </section>

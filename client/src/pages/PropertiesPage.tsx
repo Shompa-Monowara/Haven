@@ -1,7 +1,5 @@
 import {
   BookmarkPlus,
-  ChevronLeft,
-  ChevronRight,
   LayoutGrid,
   List,
   Loader2,
@@ -10,7 +8,7 @@ import {
   SlidersHorizontal,
   X,
 } from "lucide-react";
-import { lazy, Suspense, useEffect, useMemo, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { Link, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 
 import { PropertyCard, PropertyCardSkeleton } from "@/components/property/PropertyCard";
@@ -20,6 +18,7 @@ import { SaveSearchDialog } from "@/components/search/SaveSearchDialog";
 import { SearchSummaryBar } from "@/components/search/SearchSummaryBar";
 import { Seo } from "@/components/seo/Seo";
 import { Button } from "@/components/ui/button";
+import { Pagination } from "@/components/ui/pagination";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useCityCounts, usePropertySearch } from "@/lib/queries/properties";
@@ -62,66 +61,6 @@ function resultTitle(state: SearchState, total: number, loaded: boolean) {
   return `${count}${type ? ` ${type}` : ""}${place}`;
 }
 
-function Pagination({
-  page,
-  totalPages,
-  onChange,
-}: {
-  page: number;
-  totalPages: number;
-  onChange: (page: number) => void;
-}) {
-  if (totalPages <= 1) return null;
-
-  const pages = useMemo(() => {
-    const result: number[] = [];
-    const start = Math.max(1, Math.min(page - 2, totalPages - 4));
-    const end = Math.min(totalPages, start + 4);
-    for (let value = start; value <= end; value += 1) result.push(value);
-    return result;
-  }, [page, totalPages]);
-
-  return (
-    <nav aria-label="Search results pages" className="mt-8 flex items-center justify-center gap-1">
-      <Button
-        type="button"
-        variant="outline"
-        size="sm"
-        disabled={page <= 1}
-        onClick={() => onChange(page - 1)}
-        className="h-9"
-      >
-        <ChevronLeft className="h-4 w-4" aria-hidden="true" />
-        <span className="hidden sm:inline">Previous</span>
-      </Button>
-      {pages.map((value) => (
-        <Button
-          key={value}
-          type="button"
-          variant={value === page ? "primary" : "ghost"}
-          size="sm"
-          className="h-9 min-w-9 px-2 tabular"
-          aria-current={value === page ? "page" : undefined}
-          onClick={() => onChange(value)}
-        >
-          {value}
-        </Button>
-      ))}
-      <Button
-        type="button"
-        variant="outline"
-        size="sm"
-        disabled={page >= totalPages}
-        onClick={() => onChange(page + 1)}
-        className="h-9"
-      >
-        <span className="hidden sm:inline">Next</span>
-        <ChevronRight className="h-4 w-4" aria-hidden="true" />
-      </Button>
-    </nav>
-  );
-}
-
 export function PropertiesPage() {
   const [params, setParams] = useSearchParams();
   const state = parseSearchState(params);
@@ -146,14 +85,6 @@ export function PropertiesPage() {
   const properties = results.data?.data ?? [];
   const total = results.data?.meta.total ?? 0;
   const totalPages = results.data?.meta.totalPages ?? 1;
-  const querySignature = buildApiQuery(state, 24);
-  const [visibleCount, setVisibleCount] = useState(() => (isDesktop ? 24 : 3));
-
-  useEffect(() => {
-    setVisibleCount(isDesktop ? 24 : 3);
-  }, [querySignature, isDesktop]);
-
-  const visibleProperties = properties.slice(0, visibleCount);
 
   function update(partial: Partial<SearchState>, resetPage = true) {
     const next: SearchState = {
@@ -273,8 +204,8 @@ export function PropertiesPage() {
       </span>
       <h2 className="mt-3 text-lg font-semibold text-heading">No homes match these filters</h2>
       <p className="mx-auto mt-1 max-w-sm text-sm text-body">
-        Try widening the price range, removing a type, or searching a nearby city. Saved-search alerts
-        are coming with the favorites phase.
+        Try widening the price range, removing a type, or searching a nearby city. Save a search to
+        get alerts when a new home matches.
       </p>
       <Button className="mt-4" variant="outline" onClick={resetFilters}>
         Reset filters
@@ -282,13 +213,13 @@ export function PropertiesPage() {
     </div>
   ) : layout === "list" && !isMap ? (
     <div className="space-y-4">
-      {visibleProperties.map((property) => (
+      {properties.map((property) => (
         <PropertyListCard key={property.id} property={property} />
       ))}
     </div>
   ) : (
     <div className="results-grid grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
-      {visibleProperties.map((property, index) => (
+      {properties.map((property, index) => (
         <PropertyCard key={property.id} property={property} priority={index < 2} />
       ))}
     </div>
@@ -401,7 +332,10 @@ export function PropertiesPage() {
           <Pagination
             page={state.page}
             totalPages={totalPages}
-            onChange={(page) => update({ page }, false)}
+            total={total}
+            limit={results.data?.meta.limit ?? 24}
+            label="Search results pages"
+            onPageChange={(page) => update({ page }, false)}
           />
 
           <ul className="sr-only">
@@ -616,19 +550,14 @@ export function PropertiesPage() {
               <h2 className="sr-only">Search results</h2>
               {resultsMarkup}
 
-              {!results.isPending && properties.length > visibleCount ? (
-                <div className="mt-6 flex justify-center">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => setVisibleCount((count) => count + 6)}
-                  >
-                    Show more homes ({properties.length - visibleCount} remaining)
-                  </Button>
-                </div>
-              ) : null}
-
-              <Pagination page={state.page} totalPages={totalPages} onChange={(page) => update({ page }, false)} />
+              <Pagination
+                page={state.page}
+                totalPages={totalPages}
+                total={total}
+                limit={results.data?.meta.limit ?? 24}
+                label="Search results pages"
+                onPageChange={(page) => update({ page }, false)}
+              />
             </div>
           </div>
         </div>

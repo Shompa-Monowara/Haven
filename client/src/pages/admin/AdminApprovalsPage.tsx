@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { CheckCircle2, Search } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { toast } from "react-toastify";
 
@@ -9,10 +9,13 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Input } from "@/components/ui/input";
+import { Pagination } from "@/components/ui/pagination";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ApiClientError, api } from "@/lib/api";
 import { formatPrice, formatRelativeDate, formatRent } from "@/lib/format";
 import { adminKeys, useAdminListings, useAdminStats } from "@/lib/queries/admin";
+import { usePublicAgents } from "@/lib/queries/agents";
+import { usePageParam } from "@/lib/use-page-param";
 import { cn } from "@/lib/utils";
 import {
   PROPERTY_TYPES,
@@ -39,6 +42,14 @@ function priceLabel(property: PropertySummary) {
     : formatPrice(property.price);
 }
 
+function dayStart(value: string) {
+  return value ? new Date(`${value}T00:00:00`).toISOString() : undefined;
+}
+
+function dayEnd(value: string) {
+  return value ? new Date(`${value}T23:59:59.999`).toISOString() : undefined;
+}
+
 export function AdminApprovalsPage() {
   const queryClient = useQueryClient();
   const [status, setStatus] = useState<"all" | PropertyStatus>("pending");
@@ -46,21 +57,54 @@ export function AdminApprovalsPage() {
   const [listingType, setListingType] = useState("");
   const [propertyType, setPropertyType] = useState("");
   const [city, setCity] = useState("");
-  const [page, setPage] = useState(1);
+  const [agent, setAgent] = useState("");
+  const [from, setFrom] = useState("");
+  const [to, setTo] = useState("");
+  const [page, setPage] = usePageParam();
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [drawerId, setDrawerId] = useState<string | null>(null);
   const [bulkOpen, setBulkOpen] = useState(false);
 
   const stats = useAdminStats();
-  const listings = useAdminListings({ status, q, listingType, propertyType, city, page });
+  const agentOptions = usePublicAgents();
+  const listings = useAdminListings({
+    status,
+    q,
+    listingType,
+    propertyType,
+    city,
+    agent: agent || undefined,
+    from: dayStart(from),
+    to: dayEnd(to),
+    page,
+  });
   const items = listings.data?.data ?? [];
   const meta = listings.data?.meta;
   const pendingItems = useMemo(() => items.filter((item) => item.status === "pending"), [items]);
   const selectedCount = selected.size;
+  const listRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!meta) return;
+    const lastPage = Math.max(1, meta.totalPages);
+    if (page > lastPage) setPage(lastPage, { replace: true });
+  }, [meta, page, setPage]);
+
+  function resetPage() {
+    if (page !== 1) setPage(1);
+  }
+
+  function goToPage(next: number) {
+    setPage(next);
+    const element = listRef.current;
+    if (!element) return;
+    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    element.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "start" });
+  }
 
   function changeStatus(next: "all" | PropertyStatus) {
     setStatus(next);
-    setPage(1);
+    resetPage();
     setSelected(new Set());
   }
 
@@ -146,14 +190,14 @@ export function AdminApprovalsPage() {
         ))}
       </div>
 
-      <div className="grid gap-2 rounded-lg border border-line bg-surface p-3 sm:grid-cols-2 lg:grid-cols-[1fr_150px_170px_170px]">
-        <div className="relative">
+      <div className="grid gap-2 rounded-lg border border-line bg-surface p-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="relative sm:col-span-2">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" aria-hidden="true" />
           <Input
             value={q}
             onChange={(event) => {
               setQ(event.target.value);
-              setPage(1);
+              resetPage();
             }}
             placeholder="Search title or city"
             aria-label="Search listings"
@@ -164,7 +208,7 @@ export function AdminApprovalsPage() {
           value={listingType}
           onChange={(event) => {
             setListingType(event.target.value);
-            setPage(1);
+            resetPage();
           }}
           aria-label="Listing type"
           className="h-10 rounded-md border border-line bg-surface px-2.5 text-sm text-heading"
@@ -177,7 +221,7 @@ export function AdminApprovalsPage() {
           value={propertyType}
           onChange={(event) => {
             setPropertyType(event.target.value);
-            setPage(1);
+            resetPage();
           }}
           aria-label="Property type"
           className="h-10 rounded-md border border-line bg-surface px-2.5 text-sm text-heading"
@@ -193,11 +237,49 @@ export function AdminApprovalsPage() {
           value={city}
           onChange={(event) => {
             setCity(event.target.value);
-            setPage(1);
+            resetPage();
           }}
           placeholder="City"
           aria-label="City"
           className="h-10"
+        />
+        <select
+          value={agent}
+          onChange={(event) => {
+            setAgent(event.target.value);
+            resetPage();
+          }}
+          aria-label="Agent"
+          className="h-10 rounded-md border border-line bg-surface px-2.5 text-sm text-heading"
+        >
+          <option value="">All agents</option>
+          {(agentOptions.data ?? []).map((option) => (
+            <option key={option.id} value={option.id}>
+              {option.name}
+            </option>
+          ))}
+        </select>
+        <input
+          type="date"
+          value={from}
+          onChange={(event) => {
+            setFrom(event.target.value);
+            resetPage();
+          }}
+          aria-label="Created from"
+          title="Created from"
+          className="h-10 rounded-md border border-line bg-surface px-2.5 text-sm text-heading"
+        />
+        <input
+          type="date"
+          value={to}
+          onChange={(event) => {
+            setTo(event.target.value);
+            resetPage();
+          }}
+          aria-label="Created to"
+          title="Created to"
+          className="h-10 rounded-md border border-line bg-surface px-2.5 text-sm text-heading"
         />
       </div>
 
@@ -229,7 +311,13 @@ export function AdminApprovalsPage() {
           </p>
         </div>
       ) : (
-        <div className="overflow-hidden rounded-lg border border-line bg-surface">
+        <div
+          ref={listRef}
+          className={cn(
+            "overflow-hidden rounded-lg border border-line bg-surface",
+            listings.isFetching && "opacity-60 transition-opacity",
+          )}
+        >
           <div className="overflow-x-auto">
             <table className="w-full min-w-[920px] border-collapse text-left text-sm">
               <caption className="sr-only">Listings awaiting or in review</caption>
@@ -317,31 +405,14 @@ export function AdminApprovalsPage() {
         </div>
       )}
 
-      {meta && meta.totalPages > 1 ? (
-        <div className="flex items-center justify-between text-sm text-body">
-          <p>
-            Page {meta.page} of {meta.totalPages} · {meta.total} total
-          </p>
-          <div className="flex gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={meta.page <= 1}
-              onClick={() => setPage((current) => current - 1)}
-            >
-              Previous
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={meta.page >= meta.totalPages}
-              onClick={() => setPage((current) => current + 1)}
-            >
-              Next
-            </Button>
-          </div>
-        </div>
-      ) : null}
+      <Pagination
+        page={meta?.page ?? page}
+        totalPages={meta?.totalPages ?? 1}
+        total={meta?.total ?? 0}
+        limit={meta?.limit ?? 24}
+        label="Approval queue pages"
+        onPageChange={goToPage}
+      />
 
       <AdminListingDrawer
         listingId={drawerId}

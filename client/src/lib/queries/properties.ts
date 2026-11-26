@@ -112,3 +112,17 @@ export function useCityCounts(enabled = true) {
     enabled,
   });
 }
+
+export interface PropertyTypeCount {
+  propertyType: string;
+  count: number;
+}
+
+export function usePropertyTypeCounts(enabled = true) {
+  return useQuery({
+    queryKey: ["locations", "property-types"],
+    queryFn: () => api.get<PropertyTypeCount[]>("/locations/property-types"),
+    staleTime: 60_000,
+    enabled,
+  });
+}

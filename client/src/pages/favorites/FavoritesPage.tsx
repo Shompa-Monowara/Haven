@@ -11,7 +11,7 @@ import {
   Search,
   Trash2,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { toast } from "react-toastify";
 
@@ -29,10 +29,12 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { Pagination } from "@/components/ui/pagination";
 import { ApiClientError, api } from "@/lib/api";
 import { formatRelativeDate } from "@/lib/format";
 import { engagementKeys, useFavorites, useSavedSearches } from "@/lib/queries/engagement";
 import { activeChips, parseSearchState, setLayoutPreference } from "@/lib/search/search-state";
+import { usePageParam } from "@/lib/use-page-param";
 import { cn } from "@/lib/utils";
 import {
   frequencyLabels,
@@ -50,8 +52,12 @@ const sortLabels: Record<SortOption, string> = {
   newest: "Newest listing",
 };
 
+const FAVORITES_PAGE_SIZE = 9;
+const SEARCHES_PAGE_SIZE = 10;
+
 export function FavoritesPage({ initialTab = "favorites" }: { initialTab?: Tab }) {
   const queryClient = useQueryClient();
+  const [page, setPage] = usePageParam();
   const favorites = useFavorites();
   const searches = useSavedSearches();
   const [tab, setTab] = useState<Tab>(initialTab);
@@ -93,6 +99,47 @@ export function FavoritesPage({ initialTab = "favorites" }: { initialTab?: Tab }
     }
     return list;
   }, [favorites.data, sort]);
+
+  const favoritesTotal = sortedFavorites.length;
+  const favoritesTotalPages = Math.max(1, Math.ceil(favoritesTotal / FAVORITES_PAGE_SIZE));
+  const favoritesPage = Math.min(Math.max(1, page), favoritesTotalPages);
+  const favoritesStart = (favoritesPage - 1) * FAVORITES_PAGE_SIZE;
+  const favoriteItems = sortedFavorites.slice(favoritesStart, favoritesStart + FAVORITES_PAGE_SIZE);
+
+  const searchesList = searches.data ?? [];
+  const searchesTotal = searchesList.length;
+  const searchesTotalPages = Math.max(1, Math.ceil(searchesTotal / SEARCHES_PAGE_SIZE));
+  const searchesPage = Math.min(Math.max(1, page), searchesTotalPages);
+  const searchesStart = (searchesPage - 1) * SEARCHES_PAGE_SIZE;
+  const searchItems = searchesList.slice(searchesStart, searchesStart + SEARCHES_PAGE_SIZE);
+
+  const favoritesListRef = useRef<HTMLDivElement | null>(null);
+  const searchesListRef = useRef<HTMLUListElement | null>(null);
+  const activeTotalPages = tab === "favorites" ? favoritesTotalPages : searchesTotalPages;
+
+  useEffect(() => {
+    if (page > activeTotalPages) setPage(activeTotalPages, { replace: true });
+  }, [page, activeTotalPages, setPage]);
+
+  function resetPage() {
+    if (page !== 1) setPage(1);
+  }
+
+  function scrollToList(next: number, target: { current: HTMLElement | null }) {
+    setPage(next);
+    const element = target.current;
+    if (!element) return;
+    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    element.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "start" });
+  }
+
+  function goToFavoritesPage(next: number) {
+    scrollToList(next, favoritesListRef);
+  }
+
+  function goToSearchesPage(next: number) {
+    scrollToList(next, searchesListRef);
+  }
 
   const updateSearch = useMutation({
     mutationFn: (input: {
@@ -163,7 +210,10 @@ export function FavoritesPage({ initialTab = "favorites" }: { initialTab?: Tab }
             type="button"
             role="tab"
             aria-selected={tab === option.value}
-            onClick={() => setTab(option.value)}
+            onClick={() => {
+              setTab(option.value);
+              resetPage();
+            }}
             className={cn(
               "inline-flex h-10 items-center gap-2 rounded-pill border px-4 text-sm font-medium transition-colors",
               tab === option.value
@@ -186,7 +236,10 @@ export function FavoritesPage({ initialTab = "favorites" }: { initialTab?: Tab }
               Sort
               <select
                 value={sort}
-                onChange={(event) => setSort(event.target.value as SortOption)}
+                onChange={(event) => {
+                  setSort(event.target.value as SortOption);
+                  resetPage();
+                }}
                 className="h-9 rounded-md border border-line bg-surface px-2 text-sm text-heading focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
               >
                 {Object.entries(sortLabels).map(([value, label]) => (
@@ -245,18 +298,27 @@ export function FavoritesPage({ initialTab = "favorites" }: { initialTab?: Tab }
               </Button>
             </div>
           ) : layout === "list" ? (
-            <div className="space-y-4">
-              {sortedFavorites.map((property) => (
+            <div ref={favoritesListRef} className="space-y-4">
+              {favoriteItems.map((property) => (
                 <PropertyListCard key={property.id} property={property} />
               ))}
             </div>
           ) : (
-            <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
-              {sortedFavorites.map((property) => (
+            <div ref={favoritesListRef} className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
+              {favoriteItems.map((property) => (
                 <PropertyCard key={property.id} property={property} />
               ))}
             </div>
           )}
+
+          <Pagination
+            page={favoritesPage}
+            totalPages={favoritesTotalPages}
+            total={favoritesTotal}
+            limit={FAVORITES_PAGE_SIZE}
+            label="Favorite homes pages"
+            onPageChange={goToFavoritesPage}
+          />
         </section>
       ) : (
         <section aria-label="Saved searches" className="space-y-4">
@@ -278,9 +340,9 @@ export function FavoritesPage({ initialTab = "favorites" }: { initialTab?: Tab }
                 <div key={index} className="h-32 animate-pulse rounded-lg bg-line/40" />
               ))}
             </div>
-          ) : searches.data?.length ? (
-            <ul className="space-y-4">
-              {searches.data.map((search) => {
+          ) : searchesTotal ? (
+            <ul ref={searchesListRef} className="space-y-4">
+              {searchItems.map((search) => {
                 const chips = activeChips(parseSearchState(new URLSearchParams(search.criteria)));
                 const alertsOn = search.frequency !== "off";
 
@@ -371,6 +433,15 @@ export function FavoritesPage({ initialTab = "favorites" }: { initialTab?: Tab }
               </Button>
             </div>
           )}
+
+          <Pagination
+            page={searchesPage}
+            totalPages={searchesTotalPages}
+            total={searchesTotal}
+            limit={SEARCHES_PAGE_SIZE}
+            label="Saved search pages"
+            onPageChange={goToSearchesPage}
+          />
         </section>
       )}
 

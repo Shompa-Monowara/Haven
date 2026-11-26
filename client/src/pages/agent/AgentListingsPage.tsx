@@ -1,16 +1,19 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Archive, Eye, Home, Pencil, PlusCircle, Trash2 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { toast } from "react-toastify";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { Pagination } from "@/components/ui/pagination";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ApiClientError, api } from "@/lib/api";
 import { formatPrice, formatRelativeDate, formatRent } from "@/lib/format";
+import { useInquiries } from "@/lib/queries/engagement";
 import { propertyKeys, useMyListings } from "@/lib/queries/properties";
+import { usePageParam } from "@/lib/use-page-param";
 import {
   coverImage,
   statusLabels,
@@ -30,6 +33,8 @@ const filters: Array<{ label: string; value: "all" | PropertyStatus }> = [
   { label: "Archived", value: "archived" },
 ];
 
+const LISTINGS_PAGE_SIZE = 10;
+
 function priceLabel(property: PropertySummary) {
   return property.listingType === "rent"
     ? formatRent(property.price, property.rentPeriod ?? "monthly")
@@ -43,16 +48,53 @@ function editable(status: PropertyStatus) {
 export function AgentListingsPage() {
   const queryClient = useQueryClient();
   const { data, isPending, isError, refetch } = useMyListings();
+  const inquiries = useInquiries();
+  const [page, setPage] = usePageParam();
   const [filter, setFilter] = useState<"all" | PropertyStatus>("all");
   const [pendingAction, setPendingAction] = useState<
     { type: "archive" | "delete"; property: PropertySummary } | null
   >(null);
 
   const listings = data ?? [];
+  const leadsByProperty = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const lead of inquiries.data ?? []) {
+      if (!lead.property) continue;
+      counts.set(lead.property.id, (counts.get(lead.property.id) ?? 0) + 1);
+    }
+    return counts;
+  }, [inquiries.data]);
   const filtered = useMemo(
     () => (filter === "all" ? listings : listings.filter((item) => item.status === filter)),
     [filter, listings],
   );
+  const listRef = useRef<HTMLDivElement | null>(null);
+  const total = filtered.length;
+  const totalPages = Math.max(1, Math.ceil(total / LISTINGS_PAGE_SIZE));
+  const currentPage = Math.min(Math.max(1, page), totalPages);
+  const startIndex = (currentPage - 1) * LISTINGS_PAGE_SIZE;
+  const pageItems = filtered.slice(startIndex, startIndex + LISTINGS_PAGE_SIZE);
+
+  useEffect(() => {
+    if (page > totalPages) setPage(totalPages, { replace: true });
+  }, [page, totalPages, setPage]);
+
+  function resetPage() {
+    if (page !== 1) setPage(1);
+  }
+
+  function changeFilter(next: "all" | PropertyStatus) {
+    setFilter(next);
+    resetPage();
+  }
+
+  function goToPage(next: number) {
+    setPage(next);
+    const element = listRef.current;
+    if (!element) return;
+    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    element.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "start" });
+  }
 
   function refresh() {
     void queryClient.invalidateQueries({ queryKey: propertyKeys.mine });
@@ -106,7 +148,7 @@ export function AgentListingsPage() {
           <button
             key={option.value}
             type="button"
-            onClick={() => setFilter(option.value)}
+            onClick={() => changeFilter(option.value)}
             aria-pressed={filter === option.value}
             className={cn(
               "h-9 rounded-pill border px-3 text-xs font-medium transition-colors",
@@ -160,7 +202,7 @@ export function AgentListingsPage() {
           ) : null}
         </div>
       ) : (
-        <div className="overflow-hidden rounded-lg border border-line bg-surface">
+        <div ref={listRef} className="overflow-hidden rounded-lg border border-line bg-surface">
           <div className="overflow-x-auto">
             <table className="w-full min-w-[820px] border-collapse text-left text-sm">
               <caption className="sr-only">Your property listings</caption>
@@ -170,12 +212,13 @@ export function AgentListingsPage() {
                   <th scope="col" className="px-4 py-3 font-semibold">Status</th>
                   <th scope="col" className="px-4 py-3 font-semibold">Price</th>
                   <th scope="col" className="px-4 py-3 font-semibold">Views</th>
+                  <th scope="col" className="px-4 py-3 font-semibold">Leads</th>
                   <th scope="col" className="px-4 py-3 font-semibold">Updated</th>
                   <th scope="col" className="px-4 py-3 text-right font-semibold">Actions</th>
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((property) => {
+                {pageItems.map((property) => {
                   const image = coverImage(property.images);
                   return (
                     <tr key={property.id} className="border-b border-line last:border-0 align-middle">
@@ -205,6 +248,9 @@ export function AgentListingsPage() {
                       </td>
                       <td className="px-4 py-3 text-heading tabular">{priceLabel(property)}</td>
                       <td className="px-4 py-3 text-body tabular">{property.views}</td>
+                      <td className="px-4 py-3 text-body tabular">
+                        {leadsByProperty.get(property.id) ?? 0}
+                      </td>
                       <td className="px-4 py-3 text-body">{formatRelativeDate(property.updatedAt)}</td>
                       <td className="px-4 py-3">
                         <div className="flex flex-wrap items-center justify-end gap-1">
@@ -253,6 +299,15 @@ export function AgentListingsPage() {
           </div>
         </div>
       )}
+
+      <Pagination
+        page={currentPage}
+        totalPages={totalPages}
+        total={total}
+        limit={LISTINGS_PAGE_SIZE}
+        label="Listing pages"
+        onPageChange={goToPage}
+      />
 
       <ConfirmDialog
         open={pendingAction?.type === "archive"}

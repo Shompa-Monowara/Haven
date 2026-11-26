@@ -183,36 +183,74 @@ export function ContactPage() {
   );
 }
 
-const faqs = [
+const faqGroups: Array<{
+  title: string;
+  items: Array<{ question: string; answer: string }>;
+}> = [
   {
-    question: "Do I need an account to browse?",
-    answer:
-      "No. Search, filters, the map, and listing details are public. Saving homes, saved searches, inquiries, and chat require a free account.",
+    title: "Buying",
+    items: [
+      {
+        question: "How do I arrange a viewing?",
+        answer:
+          "Open a listing and use the inquiry form or “Message agent” button. The agent confirms a time and keeps the property details in the thread.",
+      },
+      {
+        question: "Why can’t I see a listing I saved?",
+        answer:
+          "A home may have been archived, or the agent account may be suspended. Archived homes stay available by direct link but leave search and sitemaps.",
+      },
+    ],
   },
   {
-    question: "How long does listing review take?",
-    answer:
-      "Most listings are reviewed within one business day. Listings with missing photos, an incomplete address, or unclear pricing receive a specific change request.",
+    title: "Renting",
+    items: [
+      {
+        question: "How do I know a rental is still available?",
+        answer:
+          "Listings are reviewed before publishing and removed when they are no longer offered. If a home no longer appears in search, it is no longer available.",
+      },
+      {
+        question: "How is rent shown?",
+        answer:
+          "Rental prices always include the period (monthly, weekly, or nightly) on cards, the detail page, and the map, so you can compare like for like.",
+      },
+    ],
   },
   {
-    question: "Can I edit a listing after it is published?",
-    answer:
-      "Cosmetic edits publish immediately. Material changes such as price, address, photos, or property type send the listing back for review.",
+    title: "Listing",
+    items: [
+      {
+        question: "How long does listing review take?",
+        answer:
+          "Most listings are reviewed within one business day. Listings with missing photos, an incomplete address, or unclear pricing receive a specific change request.",
+      },
+      {
+        question: "Can I edit a listing after it is published?",
+        answer:
+          "Cosmetic edits publish immediately. Material changes such as price, address, photos, or property type send the listing back for review.",
+      },
+      {
+        question: "How do I report a listing?",
+        answer:
+          "Email support@haven.example with the listing link and the issue. Moderators can request changes, reject, or archive a listing and record the reason.",
+      },
+    ],
   },
   {
-    question: "Why can’t I see a listing I saved?",
-    answer:
-      "A home may have been archived, or the agent account may be suspended. Archived homes stay available by direct link but leave search and sitemaps.",
-  },
-  {
-    question: "How do saved search alerts work?",
-    answer:
-      "Choose instant, daily, or weekly alerts. Haven checks new approved listings against your filters and sends a digest when new matches appear.",
-  },
-  {
-    question: "How do I report a listing?",
-    answer:
-      "Email support@haven.example with the listing link and the issue. Moderators can request changes, reject, or archive a listing and record the reason.",
+    title: "Account",
+    items: [
+      {
+        question: "Do I need an account to browse?",
+        answer:
+          "No. Search, filters, the map, the agent directory, and listing details are public. Saving homes, saved searches, inquiries, and chat require a free account.",
+      },
+      {
+        question: "How do saved search alerts work?",
+        answer:
+          "Choose instant, daily, or weekly alerts. Haven checks new approved listings against your filters and sends a digest when new matches appear.",
+      },
+    ],
   },
 ];
 
@@ -224,19 +262,31 @@ export function FaqPage() {
       path="/faq"
       lede="Short answers for buyers, renters, and agents using Haven."
     >
-      <div className="divide-y divide-line rounded-lg border border-line">
-        {faqs.map((item) => (
-          <details key={item.question} className="group px-5 py-4">
-            <summary className="cursor-pointer list-none font-medium text-heading marker:hidden">
-              <span className="flex items-center justify-between gap-3">
-                {item.question}
-                <span className="text-muted transition-transform group-open:rotate-45" aria-hidden="true">
-                  +
-                </span>
-              </span>
-            </summary>
-            <p className="mt-2 text-sm leading-relaxed">{item.answer}</p>
-          </details>
+      <div className="space-y-8">
+        {faqGroups.map((group) => (
+          <section key={group.title} aria-labelledby={`faq-${group.title}`}>
+            <h2 id={`faq-${group.title}`} className="text-xl font-bold text-heading">
+              {group.title}
+            </h2>
+            <div className="mt-3 divide-y divide-line rounded-lg border border-line">
+              {group.items.map((item) => (
+                <details key={item.question} className="group px-5 py-4">
+                  <summary className="cursor-pointer list-none font-medium text-heading marker:hidden">
+                    <span className="flex items-center justify-between gap-3">
+                      {item.question}
+                      <span
+                        className="text-muted transition-transform group-open:rotate-45"
+                        aria-hidden="true"
+                      >
+                        +
+                      </span>
+                    </span>
+                  </summary>
+                  <p className="mt-2 text-sm leading-relaxed">{item.answer}</p>
+                </details>
+              ))}
+            </div>
+          </section>
         ))}
       </div>
 

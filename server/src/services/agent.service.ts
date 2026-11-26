@@ -6,7 +6,7 @@ import { summarizeProperties } from "./property.service";
 
 async function agentDtos() {
   const users = await UserModel.find({ role: "agent", status: "active" }).select(
-    "name avatar",
+    "name avatar lastLoginAt updatedAt",
   );
   const profiles = await AgentProfileModel.find({ user: { $in: users.map((user) => user._id) } });
   const profileMap = new Map(profiles.map((profile) => [profile.user.toString(), profile]));
@@ -35,6 +35,9 @@ async function agentDtos() {
       responseTimeMinutes: profile?.responseTimeMinutes ?? 120,
       serviceAreas: profile?.serviceAreas ?? [],
       listingCount: countMap.get(user.id) ?? 0,
+      // Recency signal for the directory's "Recently active" sort. Falls back to
+      // the account's last update when the agent has never signed in.
+      lastActiveAt: (user.lastLoginAt ?? user.updatedAt ?? new Date()).toISOString(),
     };
   });
 }
