@@ -1,0 +1,58 @@
+import path from "node:path";
+import dotenv from "dotenv";
+
+// Root .env (project-wide) first, then server/.env for local overrides.
+dotenv.config({ path: path.resolve(__dirname, "../../../.env") });
+dotenv.config({ path: path.resolve(__dirname, "../../.env") });
+
+import { z } from "zod";
+
+const envSchema = z
+  .object({
+    NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
+    PORT: z.coerce.number().int().positive().max(65535).default(4000),
+    CORS_ORIGIN: z.string().default("http://localhost:5173"),
+    // Trust X-Forwarded-* from a reverse proxy: "true", a hop count ("1"), or an
+    // IP/subnet. Unset keeps Express's default (direct peer address).
+    TRUST_PROXY: z.string().min(1).optional(),
+    MONGO_URI: z.string().min(1).optional(),
+    JWT_ACCESS_SECRET: z.string().min(32).optional(),
+    JWT_REFRESH_SECRET: z.string().min(32).optional(),
+    ACCESS_TOKEN_TTL: z.string().default("15m"),
+    REFRESH_TOKEN_TTL_DAYS: z.coerce.number().int().positive().default(7),
+    UPLOAD_DIR: z.string().min(1).optional(),
+    SMTP_HOST: z.string().min(1).optional(),
+    SMTP_PORT: z.coerce.number().int().min(1).max(65535).default(587),
+    SMTP_SECURE: z.enum(["true", "false"]).default("false"),
+    SMTP_USER: z.string().min(1).optional(),
+    SMTP_PASS: z.string().min(1).optional(),
+    SMTP_FROM: z.string().min(3).default("Haven <no-reply@haven.test>"),
+  })
+  .superRefine((value, ctx) => {
+    if (value.SMTP_HOST && (value.SMTP_USER === undefined) !== (value.SMTP_PASS === undefined)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["SMTP_USER"],
+        message: "SMTP_USER and SMTP_PASS must be provided together",
+      });
+    }
+
+    if (value.SMTP_HOST && !value.SMTP_FROM.includes("@")) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["SMTP_FROM"],
+        message: "SMTP_FROM must be a valid sender address",
+      });
+    }
+  });
+
+const parsed = envSchema.safeParse(process.env);
+
+if (!parsed.success) {
+  const issues = parsed.error.issues.map((issue) => `${issue.path.join(".")}: ${issue.message}`).join("\n");
+  throw new Error(`Invalid environment configuration:\n${issues}`);
+}
+
+export const env = parsed.data;
+
+export const isProduction = env.NODE_ENV === "production";
