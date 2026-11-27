@@ -18,9 +18,13 @@ interface PropertyMapProps {
   fitKey: string;
   onTileFailure?: () => void;
   emptyView?: { lat: number; lng: number; zoom: number };
+  scrollWheelZoom?: boolean;
 }
 
 const VIEWPORT_KEY = "haven:mapViewport";
+const MIN_ZOOM = 3;
+const DEFAULT_CENTER: [number, number] = [39.8283, -98.5795];
+const DEFAULT_ZOOM = 4;
 
 function priceLabel(property: PropertySummary) {
   return property.listingType === "rent"
@@ -110,6 +114,7 @@ export default function PropertyMap({
   fitKey,
   onTileFailure,
   emptyView,
+  scrollWheelZoom = true,
 }: PropertyMapProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<L.Map | null>(null);
@@ -117,10 +122,49 @@ export default function PropertyMap({
   const markersRef = useRef(new Map<string, { marker: L.Marker; property: PropertySummary }>());
   const callbacksRef = useRef({ onActivate, onMoveEnd });
   const lastFitKeyRef = useRef<string | null>(null);
+  const lastFitSignatureRef = useRef<string | null>(null);
+  const pendingFitRef = useRef(false);
   const ignoreMovesUntilRef = useRef(0);
   const [tileFailed, setTileFailed] = useState(false);
 
   callbacksRef.current = { onActivate, onMoveEnd };
+
+  const pointSignature = properties
+    .filter((property) => property.location)
+    .map((property) => `${property.id}:${property.location!.lat}:${property.location!.lng}`)
+    .join("|");
+
+  // Fits the map only once the container has a real size, so a lazy-mounted map
+  // cannot compute a world-level view from a zero-size container.
+  const fitRef = useRef<() => boolean>(() => false);
+  fitRef.current = () => {
+    const map = mapRef.current;
+    const container = containerRef.current;
+    if (!map || !container) return false;
+    if (container.clientWidth === 0 || container.clientHeight === 0) return false;
+
+    ignoreMovesUntilRef.current = Date.now() + 900;
+    map.invalidateSize();
+
+    const points = properties
+      .filter((property) => property.location)
+      .map((property) => [property.location!.lat, property.location!.lng] as [number, number]);
+
+    if (points.length === 1) {
+      map.setView(points[0]!, 13);
+    } else if (points.length > 1) {
+      map.fitBounds(L.latLngBounds(points), { padding: [48, 48], maxZoom: 13 });
+    } else if (emptyView) {
+      map.setView([emptyView.lat, emptyView.lng], emptyView.zoom);
+    } else {
+      map.setView(DEFAULT_CENTER, DEFAULT_ZOOM);
+    }
+
+    lastFitKeyRef.current = fitKey;
+    lastFitSignatureRef.current = pointSignature;
+    pendingFitRef.current = false;
+    return true;
+  };
 
   useEffect(() => {
     const container = containerRef.current;
@@ -129,7 +173,9 @@ export default function PropertyMap({
     const map = L.map(container, {
       zoomControl: false,
       attributionControl: true,
-      scrollWheelZoom: true,
+      scrollWheelZoom,
+      minZoom: MIN_ZOOM,
+      worldCopyJump: true,
     });
     mapRef.current = map;
 
@@ -173,13 +219,23 @@ export default function PropertyMap({
     if (stored) {
       try {
         const viewport = JSON.parse(stored) as {
-          lat: number;
-          lng: number;
-          zoom: number;
+          lat?: number;
+          lng?: number;
+          zoom?: number;
           fitKey?: string;
         };
-        if (!viewport.fitKey || viewport.fitKey === fitKey) {
-          map.setView([viewport.lat, viewport.lng], viewport.zoom);
+        const { lat, lng, zoom } = viewport;
+        if (
+          typeof lat === "number" &&
+          Number.isFinite(lat) &&
+          typeof lng === "number" &&
+          Number.isFinite(lng) &&
+          typeof zoom === "number" &&
+          Number.isFinite(zoom) &&
+          zoom >= MIN_ZOOM &&
+          (!viewport.fitKey || viewport.fitKey === fitKey)
+        ) {
+          map.setView([lat, lng], zoom);
           lastFitKeyRef.current = fitKey;
           restored = true;
         }
@@ -188,7 +244,7 @@ export default function PropertyMap({
       }
     }
     if (!restored) {
-      map.setView([39.8283, -98.5795], 4);
+      map.setView(DEFAULT_CENTER, DEFAULT_ZOOM);
     }
 
     const cluster = L.markerClusterGroup({
@@ -216,10 +272,32 @@ export default function PropertyMap({
       );
     });
 
+    // Correct the size once after creation, then keep it in sync while the
+    // lazy-mounted container settles (avoids a world-level view and grey bands).
+    map.invalidateSize();
+    let resizeFrame: number | null = null;
+    const resizeObserver = new ResizeObserver(() => {
+      if (resizeFrame !== null) return;
+      resizeFrame = window.requestAnimationFrame(() => {
+        resizeFrame = null;
+        ignoreMovesUntilRef.current = Math.max(ignoreMovesUntilRef.current, Date.now() + 200);
+        map.invalidateSize();
+        if (pendingFitRef.current) {
+          fitRef.current();
+        }
+      });
+    });
+    resizeObserver.observe(container);
+
     return () => {
+      resizeObserver.disconnect();
+      if (resizeFrame !== null) {
+        window.cancelAnimationFrame(resizeFrame);
+      }
       map.remove();
       mapRef.current = null;
       clusterRef.current = null;
+      pendingFitRef.current = false;
     };
   }, []);
 
@@ -247,32 +325,24 @@ export default function PropertyMap({
       markersRef.current.set(property.id, { marker, property });
     });
 
-    if (shouldFit && properties.length && lastFitKeyRef.current !== fitKey) {
-      ignoreMovesUntilRef.current = Date.now() + 900;
-      const points = properties
-        .filter((property) => property.location)
-        .map((property) => [property.location!.lat, property.location!.lng] as [number, number]);
-
-      if (points.length === 1) {
-        map.setView(points[0]!, 13);
-      } else if (points.length > 1) {
-        map.fitBounds(L.latLngBounds(points), { padding: [48, 48], maxZoom: 13 });
-      }
-
-      lastFitKeyRef.current = fitKey;
-    } else if (
+    const initialFit = shouldFit && lastFitKeyRef.current !== fitKey;
+    const setChangedFit =
       shouldFit &&
-      properties.length === 0 &&
-      emptyView &&
-      lastFitKeyRef.current !== fitKey
-    ) {
-      ignoreMovesUntilRef.current = Date.now() + 900;
-      map.setView([emptyView.lat, emptyView.lng], emptyView.zoom);
-      lastFitKeyRef.current = fitKey;
+      lastFitKeyRef.current === fitKey &&
+      lastFitSignatureRef.current !== null &&
+      lastFitSignatureRef.current !== pointSignature;
+
+    if (initialFit || setChangedFit) {
+      const fitted = fitRef.current();
+      if (!fitted) {
+        // Container still has no size (lazy mount). The ResizeObserver will fit
+        // once it does, using the latest properties.
+        pendingFitRef.current = true;
+      }
     }
     // activeId intentionally excluded: icon swaps are handled without rebuilding layers.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [properties, shouldFit, fitKey]);
+  }, [properties, shouldFit, fitKey, pointSignature]);
 
   useEffect(() => {
     markersRef.current.forEach(({ marker, property }) => {

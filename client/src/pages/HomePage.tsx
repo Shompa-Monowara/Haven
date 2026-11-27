@@ -1,4 +1,4 @@
-import { ArrowRight, ArrowUpRight, Heart, MapPin, MessageCircle, ShieldCheck } from "lucide-react";
+import { ArrowRight, Heart, MapPin, MessageCircle, ShieldCheck } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { Suspense, lazy, useEffect, useRef } from "react";
 import { Link } from "react-router-dom";
@@ -10,6 +10,7 @@ import { HowItWorks } from "@/components/home/HowItWorks";
 import { SavedSearchTeaser } from "@/components/home/SavedSearchTeaser";
 import { AgentSpotlight } from "@/components/home/AgentSpotlight";
 import { Testimonials } from "@/components/home/Testimonials";
+import { PropertyTypeCarousel } from "@/components/home/PropertyTypeCarousel";
 import { Seo } from "@/components/seo/Seo";
 import { api } from "@/lib/api";
 import { usePublicAgents } from "@/lib/queries/agents";
@@ -246,7 +247,10 @@ export function HomePage() {
         <div className="shell-container">
           <div className="flex flex-wrap items-end justify-between gap-4">
             <div className="max-w-xl">
-              <h2 id="property-types-heading" className="text-[28px] font-bold leading-tight sm:text-[32px]">
+              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-brand-strong">
+                Explore by type
+              </p>
+              <h2 id="property-types-heading" className="mt-2 text-[28px] font-bold leading-tight sm:text-[32px]">
                 Browse by property type
               </h2>
               <p className="mt-2 text-[15px] text-body">
@@ -262,43 +266,9 @@ export function HomePage() {
             </Link>
           </div>
 
-          <ul className="mt-8 grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-6">
-            {propertyTypes.map((type) => {
-              const count = typeCounts.get(type.name.toLowerCase());
-              return (
-                <li key={type.name}>
-                  <Link
-                    to={type.href}
-                    className="group block overflow-hidden rounded-md border border-line bg-surface transition-shadow duration-200 hover:shadow-md"
-                  >
-                    <span className="relative block aspect-[4/3] overflow-hidden">
-                      <img
-                        src={type.image}
-                        alt={`${type.name} listings`}
-                        loading="lazy"
-                        className="h-full w-full object-cover transition-transform duration-300 ease-out group-hover:scale-[1.04]"
-                      />
-                      <span className="absolute inset-0 bg-gradient-to-t from-ink/75 via-ink/10 to-transparent" />
-                      <span className="absolute inset-x-0 bottom-0 flex items-end justify-between gap-2 p-3">
-                        <span>
-                          <span className="block text-sm font-semibold text-white">{type.name}</span>
-                          {typeof count === "number" ? (
-                            <span className="mt-0.5 block text-xs text-white/75">
-                              {count.toLocaleString("en-US")} {count === 1 ? "home" : "homes"}
-                            </span>
-                          ) : null}
-                        </span>
-                        <ArrowUpRight
-                          className="h-4 w-4 shrink-0 -translate-y-0.5 text-white/0 transition-all duration-200 group-hover:text-white"
-                          aria-hidden="true"
-                        />
-                      </span>
-                    </span>
-                  </Link>
-                </li>
-              );
-            })}
-          </ul>
+          <div className="mt-8">
+            <PropertyTypeCarousel types={propertyTypes} counts={typeCounts} />
+          </div>
         </div>
       </section>
 
@@ -334,29 +304,31 @@ export function HomePage() {
         </div>
       </section>
 
-      <section className="bg-ink py-16 md:py-20" aria-labelledby="cta-heading">
-        <div className="shell-container flex flex-col items-start justify-between gap-6 md:flex-row md:items-center">
-          <div>
-            <h2 id="cta-heading" className="font-display text-[28px] font-bold leading-tight text-white sm:text-[32px]">
-              Have a property to list?
-            </h2>
-            <p className="mt-2 max-w-xl text-sm leading-relaxed text-white/70">
-              Publish a listing in minutes, reach verified buyers, and manage every inquiry in one
-              place. Every submission is reviewed before it goes live.
-            </p>
-          </div>
-          <div className="flex flex-wrap gap-3">
-            <Button asChild size="lg">
-              <Link to="/list-property">List a property</Link>
-            </Button>
-            <Button
-              asChild
-              size="lg"
-              variant="outline"
-              className="border-white/25 bg-transparent text-white hover:border-white hover:bg-white/10 hover:text-white"
-            >
-              <Link to="/contact">Talk to an agent</Link>
-            </Button>
+      <section className="bg-ink pt-16 md:pt-20" aria-labelledby="cta-heading">
+        <div className="shell-container">
+          <div className="flex flex-col items-start justify-between gap-6 rounded-2xl border border-white/10 bg-white/5 p-8 md:flex-row md:items-center md:p-10">
+            <div>
+              <h2 id="cta-heading" className="font-display text-[28px] font-bold leading-tight text-white sm:text-[32px]">
+                Have a property to list?
+              </h2>
+              <p className="mt-2 max-w-xl text-sm leading-relaxed text-white/70">
+                Publish a listing in minutes, reach verified buyers, and manage every inquiry in one
+                place. Every submission is reviewed before it goes live.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-3">
+              <Button asChild size="lg">
+                <Link to="/list-property">List a property</Link>
+              </Button>
+              <Button
+                asChild
+                size="lg"
+                variant="outline"
+                className="border-white/25 bg-transparent text-white hover:border-white hover:bg-white/10 hover:text-white"
+              >
+                <Link to="/contact">Talk to an agent</Link>
+              </Button>
+            </div>
           </div>
         </div>
       </section>

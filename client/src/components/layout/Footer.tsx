@@ -1,4 +1,4 @@
-import { Heart, Mail, MapPin, Phone, Search } from "lucide-react";
+import { Clock, Heart, Mail, MapPin, Phone } from "lucide-react";
 import { FormEvent, useState } from "react";
 import { Link } from "react-router-dom";
 
@@ -14,8 +14,8 @@ export function Footer() {
 
   return (
     <footer className="bg-ink text-white">
-      <div className="shell-container grid gap-12 py-16 md:grid-cols-2 lg:grid-cols-4">
-        <div>
+      <div className="shell-container grid gap-x-10 gap-y-12 pt-14 pb-12 md:grid-cols-2 lg:grid-cols-12 lg:pt-16">
+        <div className="lg:col-span-4">
           <Link to="/" className="inline-flex items-center gap-2.5" aria-label="Haven home">
             <svg viewBox="0 0 32 32" className="h-8 w-8 text-brand" fill="none" aria-hidden="true">
               <path
@@ -67,8 +67,8 @@ export function Footer() {
           </div>
         </div>
 
-        <nav aria-labelledby="footer-discover">
-          <h2 id="footer-discover" className="text-xs font-semibold uppercase tracking-[0.08em] text-white/50">
+        <nav aria-labelledby="footer-discover" className="lg:col-span-2">
+          <h2 id="footer-discover" className="flex h-8 items-center text-xs font-semibold uppercase tracking-[0.08em] text-white/50">
             Discover
           </h2>
           <ul className="mt-4 space-y-2.5 text-sm">
@@ -88,8 +88,8 @@ export function Footer() {
           </ul>
         </nav>
 
-        <nav aria-labelledby="footer-company">
-          <h2 id="footer-company" className="text-xs font-semibold uppercase tracking-[0.08em] text-white/50">
+        <nav aria-labelledby="footer-company" className="lg:col-span-2">
+          <h2 id="footer-company" className="flex h-8 items-center text-xs font-semibold uppercase tracking-[0.08em] text-white/50">
             Company
           </h2>
           <ul className="mt-4 space-y-2.5 text-sm">
@@ -98,7 +98,7 @@ export function Footer() {
               ["Agents", "/agents"],
               ["Contact", "/contact"],
               ["FAQ", "/faq"],
-              ["List a property", "/properties"],
+              ["List a property", "/list-property"],
             ].map(([label, href]) => (
               <li key={label}>
                 <Link to={href} className="text-white/75 transition-colors hover:text-white">
@@ -109,8 +109,8 @@ export function Footer() {
           </ul>
         </nav>
 
-        <div>
-          <h2 className="text-xs font-semibold uppercase tracking-[0.08em] text-white/50">Stay in the loop</h2>
+        <div className="lg:col-span-4">
+          <h2 className="flex h-8 items-center text-xs font-semibold uppercase tracking-[0.08em] text-white/50">Stay in the loop</h2>
           <p className="mt-4 text-sm text-white/70">
             New listings and neighborhood guides, once a week.
           </p>
@@ -118,7 +118,7 @@ export function Footer() {
             <label htmlFor="newsletter-email" className="sr-only">
               Email address
             </label>
-            <div className="flex gap-2">
+            <div className="flex flex-col gap-2 sm:flex-row">
               <div className="relative flex-1">
                 <Mail
                   className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/40"
@@ -153,19 +153,19 @@ export function Footer() {
 
           <div className="mt-8 space-y-2.5 text-sm text-white/70">
             <a href="tel:+18005550142" className="flex items-center gap-2.5 hover:text-white">
-              <Phone className="h-4 w-4" aria-hidden="true" />
+              <Phone className="h-4 w-4 shrink-0 text-white/50" aria-hidden="true" />
               (800) 555-0142
             </a>
             <a href="mailto:hello@haven.example" className="flex items-center gap-2.5 hover:text-white">
-              <Mail className="h-4 w-4" aria-hidden="true" />
+              <Mail className="h-4 w-4 shrink-0 text-white/50" aria-hidden="true" />
               hello@haven.example
             </a>
             <p className="flex items-center gap-2.5">
-              <MapPin className="h-4 w-4" aria-hidden="true" />
+              <MapPin className="h-4 w-4 shrink-0 text-white/50" aria-hidden="true" />
               14 Harbor Street, Brooklyn, NY
             </p>
             <p className="flex items-center gap-2.5">
-              <Search className="h-4 w-4" aria-hidden="true" />
+              <Clock className="h-4 w-4 shrink-0 text-white/50" aria-hidden="true" />
               Mon–Fri, 9am–6pm ET
             </p>
           </div>

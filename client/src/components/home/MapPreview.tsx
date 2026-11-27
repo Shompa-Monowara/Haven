@@ -106,7 +106,10 @@ export function MapPreview() {
               </div>
             </div>
           ) : (
-            <div className="h-[360px] overflow-hidden rounded-lg border border-line md:h-[420px]">
+            <div className="relative h-[360px] overflow-hidden rounded-lg border border-line md:h-[420px]">
+              <div className="pointer-events-none absolute left-3 top-3 z-[500] rounded-md border border-line bg-surface/95 px-2.5 py-1 text-xs font-medium text-heading shadow-sm">
+                {properties.length} {properties.length === 1 ? "home" : "homes"} on the map
+              </div>
               <DeferredSection fallback={mapSkeleton}>
                 <div className="h-[360px] md:h-[420px]">
                   <Suspense fallback={mapSkeleton}>
@@ -120,6 +123,7 @@ export function MapPreview() {
                       fitKey="map-preview"
                       onTileFailure={() => setTileFailed(true)}
                       emptyView={{ lat: 40.7128, lng: -74.006, zoom: 10 }}
+                      scrollWheelZoom={false}
                     />
                   </Suspense>
                 </div>
