@@ -12,9 +12,10 @@ const envSchema = z
     NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
     PORT: z.coerce.number().int().positive().max(65535).default(4000),
     CORS_ORIGIN: z.string().default("http://localhost:5173"),
-    // Trust X-Forwarded-* from a reverse proxy: "true", a hop count ("1"), or an
-    // IP/subnet. Unset keeps Express's default (direct peer address).
-    TRUST_PROXY: z.string().min(1).optional(),
+    // Trust X-Forwarded-* from the platform proxy so req.ip (and IP rate
+    // limiting) sees the real client. Defaults to one hop for Render/Railway;
+    // set "true" only for a fully trusted chain, or an IP/subnet list.
+    TRUST_PROXY: z.string().min(1).default("1"),
     MONGO_URI: z.string().min(1).optional(),
     JWT_ACCESS_SECRET: z.string().min(32).optional(),
     JWT_REFRESH_SECRET: z.string().min(32).optional(),
@@ -63,6 +64,52 @@ const envSchema = z
         message:
           "CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, and CLOUDINARY_API_SECRET must be provided together",
       });
+    }
+
+    if (value.NODE_ENV === "production") {
+      for (const key of ["JWT_ACCESS_SECRET", "JWT_REFRESH_SECRET"] as const) {
+        if (!value[key]) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: [key],
+            message: `${key} is required in production`,
+          });
+        }
+      }
+
+      if (!value.MONGO_URI) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["MONGO_URI"],
+          message: "MONGO_URI is required in production",
+        });
+      } else if (/localhost|127\.0\.0\.1|0\.0\.0\.0|::1/i.test(value.MONGO_URI)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["MONGO_URI"],
+          message: "MONGO_URI must not point to localhost in production",
+        });
+      }
+
+      const origins = value.CORS_ORIGIN.split(",")
+        .map((origin) => origin.trim())
+        .filter(Boolean);
+      const invalidOrigin =
+        origins.length === 0 ||
+        origins.some(
+          (origin) =>
+            origin === "*" ||
+            !origin.startsWith("https://") ||
+            /localhost|127\.0\.0\.1/i.test(origin),
+        );
+      if (invalidOrigin) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["CORS_ORIGIN"],
+          message:
+            "CORS_ORIGIN must be an explicit https origin (no wildcard, no localhost) in production",
+        });
+      }
     }
   });
 

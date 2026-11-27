@@ -197,12 +197,19 @@ export function createImageStore(settings: ImageStoreSettings = {}): ImageStore 
   };
 }
 
-const defaultStore = createImageStore({
-  cloudName: env.CLOUDINARY_CLOUD_NAME,
-  apiKey: env.CLOUDINARY_API_KEY,
-  apiSecret: env.CLOUDINARY_API_SECRET,
-  localRoot: UPLOAD_ROOT,
-});
+// Tests must never call the real Cloudinary API. Force the default store onto
+// local disk in test mode even if the developer's .env contains Cloudinary
+// credentials. Explicit `createImageStore` callers are unaffected.
+const defaultStore = createImageStore(
+  env.NODE_ENV === "test"
+    ? { localRoot: UPLOAD_ROOT }
+    : {
+        cloudName: env.CLOUDINARY_CLOUD_NAME,
+        apiKey: env.CLOUDINARY_API_KEY,
+        apiSecret: env.CLOUDINARY_API_SECRET,
+        localRoot: UPLOAD_ROOT,
+      },
+);
 
 export const storageProvider = defaultStore.provider;
 export const saveImage = defaultStore.saveImage;

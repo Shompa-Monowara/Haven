@@ -2,7 +2,26 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 const dist = path.resolve("dist");
-const site = (process.env.VITE_SITE_URL || "https://haven.example.com").replace(/\/$/, "");
+const configuredSite = process.env.VITE_SITE_URL;
+const isProductionBuild =
+  process.env.NODE_ENV === "production" ||
+  process.env.VERCEL === "1" ||
+  process.env.CI === "true";
+
+if (isProductionBuild && (!configuredSite || configuredSite.includes("example.com"))) {
+  console.error(
+    [
+      "",
+      '[prerender] VITE_SITE_URL is required for production/CI builds and must not contain "example.com".',
+      "Set it to your public site origin, for example: VITE_SITE_URL=https://www.your-domain.com",
+      `Current value: ${configuredSite ?? "(unset)"}`,
+      "",
+    ].join("\n"),
+  );
+  process.exit(1);
+}
+
+const site = (configuredSite || "https://haven.example.com").replace(/\/$/, "");
 const template = await readFile(path.join(dist, "index.html"), "utf8");
 
 const routes = [

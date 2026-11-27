@@ -2,7 +2,7 @@ import { createServer } from "node:http";
 
 import { createApp } from "./app";
 import { initializeDatabase, disconnectDatabase } from "./config/db";
-import { env } from "./config/env";
+import { env, isProduction } from "./config/env";
 import { seedDevAdmin } from "./lib/dev-seed";
 import { seedDevContent } from "./lib/dev-seed-content";
 import { startDigestJob } from "./lib/digest-job";
@@ -10,6 +10,15 @@ import { logger } from "./lib/logger";
 import { closeRealtime, initRealtime } from "./lib/realtime";
 
 async function start(): Promise<void> {
+  if (
+    isProduction &&
+    !(env.CLOUDINARY_CLOUD_NAME && env.CLOUDINARY_API_KEY && env.CLOUDINARY_API_SECRET)
+  ) {
+    logger.warn(
+      "Cloudinary is not configured. Uploaded media will be written to local disk and lost when the service redeploys.",
+    );
+  }
+
   try {
     await initializeDatabase();
     await seedDevAdmin();

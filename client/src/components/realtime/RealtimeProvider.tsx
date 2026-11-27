@@ -45,7 +45,7 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
     void import("socket.io-client").then(({ io }) => {
       if (cancelled) return;
 
-      nextSocket = io({
+      nextSocket = io(import.meta.env.VITE_SOCKET_URL as string | undefined, {
         auth: { token: accessToken },
         transports: ["websocket", "polling"],
         reconnection: true,
