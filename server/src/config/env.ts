@@ -1,8 +1,8 @@
 import path from "node:path";
 import dotenv from "dotenv";
 
-// Root .env (project-wide) first, then server/.env for local overrides.
-dotenv.config({ path: path.resolve(__dirname, "../../../.env") });
+// Local development loads server/.env. In production (Render) there is no
+// .env file; variables come from the platform's environment settings.
 dotenv.config({ path: path.resolve(__dirname, "../../.env") });
 
 import { z } from "zod";
