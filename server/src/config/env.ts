@@ -28,6 +28,7 @@ const envSchema = z
     SMTP_USER: z.string().min(1).optional(),
     SMTP_PASS: z.string().min(1).optional(),
     SMTP_FROM: z.string().min(3).default("Haven <no-reply@haven.test>"),
+    BREVO_API_KEY: z.string().min(1).optional(),
     // Optional Cloudinary storage. When all three are set, uploads go to
     // Cloudinary; otherwise they are written to UPLOAD_DIR on local disk.
     CLOUDINARY_CLOUD_NAME: z.string().min(1).optional(),

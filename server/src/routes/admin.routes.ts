@@ -9,9 +9,15 @@ import {
   updateAdminUser,
 } from "../services/admin.service";
 import {
+  getPlatformSettings,
+  getSystemStatus,
+  updatePlatformSettings,
+} from "../services/settings.service";
+import {
   adminAuditQuerySchema,
   adminUserQuerySchema,
   adminUserUpdateSchema,
+  platformSettingsUpdateSchema,
 } from "../validation/admin.schemas";
 
 export const adminRouter = Router();
@@ -48,5 +54,22 @@ adminRouter.get(
     const query = adminAuditQuerySchema.parse(req.query);
     const result = await listAdminAudit(query);
     res.json({ data: result.items, meta: result.meta });
+  }),
+);
+
+adminRouter.get(
+  "/settings",
+  asyncHandler(async (_req, res) => {
+    const settings = await getPlatformSettings();
+    res.json({ data: { settings, status: getSystemStatus() } });
+  }),
+);
+
+adminRouter.patch(
+  "/settings",
+  asyncHandler(async (req, res) => {
+    const payload = platformSettingsUpdateSchema.parse(req.body);
+    const settings = await updatePlatformSettings(req.auth!.id, payload, req.ip);
+    res.json({ data: { settings, status: getSystemStatus() } });
   }),
 );

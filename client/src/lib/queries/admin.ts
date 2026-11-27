@@ -1,8 +1,15 @@
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api } from "@/lib/api";
 import type { PageMeta, PropertyStatus, PropertySummary } from "@/types/property";
-import type { AdminListingDetail, AdminStats, AdminUser, AuditEntry } from "@/types/admin";
+import type {
+  AdminListingDetail,
+  AdminStats,
+  AdminUser,
+  AuditEntry,
+  PlatformSettingsPatch,
+  PlatformSettingsPayload,
+} from "@/types/admin";
 
 export const adminKeys = {
   stats: ["admin", "stats"] as const,
@@ -10,6 +17,7 @@ export const adminKeys = {
   listing: (id: string) => ["admin", "listing", id] as const,
   users: (filters: unknown) => ["admin", "users", filters] as const,
   audit: (filters: unknown) => ["admin", "audit", filters] as const,
+  settings: ["admin", "settings"] as const,
 };
 
 export function useAdminStats() {
@@ -104,5 +112,26 @@ export function useAdminAudit(filters: {
         meta: PageMeta;
       }>,
     placeholderData: (previous) => previous,
+  });
+}
+
+export function useAdminSettings() {
+  return useQuery({
+    queryKey: adminKeys.settings,
+    queryFn: () => api.get<PlatformSettingsPayload>("/admin/settings"),
+    staleTime: 15_000,
+  });
+}
+
+export function useUpdateAdminSettings() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (patch: PlatformSettingsPatch) =>
+      api.patch<PlatformSettingsPayload>("/admin/settings", patch),
+    onSuccess: (data) => {
+      queryClient.setQueryData(adminKeys.settings, data);
+      queryClient.invalidateQueries({ queryKey: ["admin", "audit"] });
+    },
   });
 }

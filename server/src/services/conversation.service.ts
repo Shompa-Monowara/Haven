@@ -11,6 +11,7 @@ import {
 import { PropertyModel, type PropertyDocument } from "../models/property.model";
 import { UserModel } from "../models/user.model";
 import { createNotification } from "./notification.service";
+import { getPlatformSettings } from "./settings.service";
 
 interface Viewer {
   id: string;
@@ -314,18 +315,21 @@ async function notifyOfflineRecipient(
 
   if (!recipient || !sender) return;
 
-  await sendOfflineMessageEmail({
-    to: recipient.email,
-    recipientName: recipient.name,
-    senderName: sender.name,
-    propertyTitle: property?.title ?? "a saved home",
-    preview: body.slice(0, 160),
-    conversationUrl: `${env.CORS_ORIGIN}${
-      recipientId === conversation.agent.toString()
-        ? `/agent/messages/${conversation.id}`
-        : `/account/messages/${conversation.id}`
-    }`,
-  });
+  const settings = await getPlatformSettings();
+  if (settings.notifications.offlineMessageEmails) {
+    await sendOfflineMessageEmail({
+      to: recipient.email,
+      recipientName: recipient.name,
+      senderName: sender.name,
+      propertyTitle: property?.title ?? "a saved home",
+      preview: body.slice(0, 160),
+      conversationUrl: `${env.CORS_ORIGIN}${
+        recipientId === conversation.agent.toString()
+          ? `/agent/messages/${conversation.id}`
+          : `/account/messages/${conversation.id}`
+      }`,
+    });
+  }
 }
 
 export async function sendMessage(

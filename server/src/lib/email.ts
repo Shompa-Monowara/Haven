@@ -37,7 +37,60 @@ function getTransport(): Transporter | null {
   return cachedTransport;
 }
 
+const BREVO_ENDPOINT = "https://api.brevo.com/v3/smtp/email";
+
+function parseFrom(from: string): { name?: string; email: string } {
+  const match = from.match(/^\s*(.*?)\s*<([^>]+)>\s*$/);
+  if (match) {
+    const name = match[1]?.trim();
+    const email = match[2]?.trim();
+    if (email) return name ? { name, email } : { email };
+  }
+  return { email: from.trim() };
+}
+
+async function sendViaBrevo(input: MailInput): Promise<void> {
+  const payload: Record<string, unknown> = {
+    sender: parseFrom(env.SMTP_FROM),
+    to: [{ email: input.to }],
+    subject: input.subject,
+    textContent: input.text,
+  };
+  if (input.html) payload.htmlContent = input.html;
+  if (input.replyTo) payload.replyTo = { email: input.replyTo };
+
+  try {
+    const response = await fetch(BREVO_ENDPOINT, {
+      method: "POST",
+      headers: {
+        "api-key": env.BREVO_API_KEY ?? "",
+        "content-type": "application/json",
+        accept: "application/json",
+      },
+      body: JSON.stringify(payload),
+    });
+
+    if (!response.ok) {
+      const responseBody = await response.text().catch(() => "");
+      logger.error(
+        { status: response.status, responseBody, to: input.to },
+        "Brevo email delivery failed",
+      );
+      return;
+    }
+
+    logger.info({ to: input.to, subject: input.subject }, "Email sent (Brevo)");
+  } catch (error) {
+    logger.error({ err: error, to: input.to }, "Brevo email delivery failed");
+  }
+}
+
 export async function sendMail(input: MailInput): Promise<void> {
+  if (env.BREVO_API_KEY) {
+    await sendViaBrevo(input);
+    return;
+  }
+
   const transport = getTransport();
 
   if (!transport) {

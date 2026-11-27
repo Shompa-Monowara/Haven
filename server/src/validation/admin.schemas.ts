@@ -28,3 +28,35 @@ export const adminAuditQuerySchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(60).default(30),
 });
+
+export const platformSettingsUpdateSchema = z
+  .object({
+    review: z
+      .object({
+        standardReviewBusinessDays: z
+          .number()
+          .int()
+          .min(1, "Use at least 1 business day")
+          .max(10, "Use at most 10 business days")
+          .optional(),
+      })
+      .strict()
+      .optional(),
+    notifications: z
+      .object({
+        listingDecisionEmails: z.boolean().optional(),
+        offlineMessageEmails: z.boolean().optional(),
+        savedSearchDigests: z.boolean().optional(),
+      })
+      .strict()
+      .optional(),
+  })
+  .strict()
+  .refine(
+    (value) =>
+      value.review?.standardReviewBusinessDays !== undefined ||
+      value.notifications?.listingDecisionEmails !== undefined ||
+      value.notifications?.offlineMessageEmails !== undefined ||
+      value.notifications?.savedSearchDigests !== undefined,
+    { message: "No changes supplied" },
+  );

@@ -8,6 +8,7 @@ import { buildPublicPropertyFilter, escapeRegex } from "../lib/property-filter";
 import { deleteUploads } from "../lib/uploads";
 import { createNotification, createNotifications } from "./notification.service";
 import { notifyInstantMatches } from "./saved-search.service";
+import { getPlatformSettings } from "./settings.service";
 
 export { buildPublicPropertyFilter };
 import { toAgentSummary, toPropertyDetailDto, toPropertySummaryDto } from "../lib/property-serializers";
@@ -483,16 +484,19 @@ export async function decideProperty(
           : `/agent/listings/${property.id}/edit`,
     });
 
-    void sendListingDecisionEmail({
-      to: agent.email,
-      agentName: agent.name,
-      listingTitle: property.title,
-      decision: input.status,
-      reason: input.reasonCategory,
-      note: input.note,
-      listingUrl: `${env.CORS_ORIGIN}/properties/${property.slug}`,
-      dashboardUrl: `${env.CORS_ORIGIN}/agent/listings`,
-    });
+    const settings = await getPlatformSettings();
+    if (settings.notifications.listingDecisionEmails) {
+      void sendListingDecisionEmail({
+        to: agent.email,
+        agentName: agent.name,
+        listingTitle: property.title,
+        decision: input.status,
+        reason: input.reasonCategory,
+        note: input.note,
+        listingUrl: `${env.CORS_ORIGIN}/properties/${property.slug}`,
+        dashboardUrl: `${env.CORS_ORIGIN}/agent/listings`,
+      });
+    }
   }
 
   if (input.status === "approved") {

@@ -8,6 +8,7 @@ import { UserModel } from "../models/user.model";
 import { propertyListQuerySchema } from "../validation/property.schemas";
 import { buildPublicPropertyFilter } from "../lib/property-filter";
 import { createNotification } from "./notification.service";
+import { getPlatformSettings } from "./settings.service";
 
 const DIGEST_INTERVAL_MS: Record<string, number> = {
   daily: 24 * 60 * 60 * 1000,
@@ -143,6 +144,11 @@ function isDigestDue(search: SavedSearchDocument) {
  * `force` ignores the cadence (used by the admin trigger).
  */
 export async function runSavedSearchDigests({ force = false }: { force?: boolean } = {}) {
+  const settings = await getPlatformSettings();
+  if (!settings.notifications.savedSearchDigests) {
+    return { processed: 0, emailsSent: 0, totalMatches: 0 };
+  }
+
   const candidates = await SavedSearchModel.find({ frequency: { $in: ["daily", "weekly"] } });
   const searches = force ? candidates : candidates.filter(isDigestDue);
   let emailsSent = 0;
