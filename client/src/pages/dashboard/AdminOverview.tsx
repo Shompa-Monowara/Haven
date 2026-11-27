@@ -1,5 +1,5 @@
 import { ArrowRight, Building2, ClipboardCheck, Inbox, Users } from "lucide-react";
-import { useState } from "react";
+import { lazy, Suspense, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 
 import { AdminListingDrawer } from "@/components/admin/AdminListingDrawer";
@@ -8,7 +8,67 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatPrice, formatRelativeDate, formatRent } from "@/lib/format";
 import { useAdminStats } from "@/lib/queries/admin";
-import { auditActionLabels } from "@/types/admin";
+import { auditActionLabels, type AuditEntry } from "@/types/admin";
+
+const StatusDonutChart = lazy(() =>
+  import("@/components/dashboard/StatusDonutChart").then((module) => ({
+    default: module.StatusDonutChart,
+  })),
+);
+
+const ActivityTrendChart = lazy(() =>
+  import("@/components/dashboard/ActivityTrendChart").then((module) => ({
+    default: module.ActivityTrendChart,
+  })),
+);
+
+function ChartFallback() {
+  return (
+    <div
+      className="rounded-lg border border-line bg-surface p-6"
+      aria-busy="true"
+      aria-label="Loading chart"
+    >
+      <Skeleton className="h-5 w-40" />
+      <Skeleton className="mt-2 h-3 w-56 max-w-full" />
+      <Skeleton className="mt-4 h-64 w-full" />
+    </div>
+  );
+}
+
+function StatLink({ to, children }: { to: string; children: ReactNode }) {
+  return (
+    <Link
+      to={to}
+      className="block rounded-lg transition-shadow hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
+    >
+      {children}
+    </Link>
+  );
+}
+
+function dedupeActivity(entries: AuditEntry[]): AuditEntry[] {
+  const result: AuditEntry[] = [];
+
+  for (const entry of entries) {
+    const previous = result[result.length - 1];
+
+    if (previous && previous.action === entry.action) {
+      const previousActor = previous.actor?.id ?? "system";
+      const actor = entry.actor?.id ?? "system";
+      const previousMinute = Math.floor(new Date(previous.createdAt).getTime() / 60_000);
+      const minute = Math.floor(new Date(entry.createdAt).getTime() / 60_000);
+
+      if (previousActor === actor && previousMinute === minute) {
+        continue;
+      }
+    }
+
+    result.push(entry);
+  }
+
+  return result;
+}
 
 export function AdminOverview() {
   const { data, isPending } = useAdminStats();
@@ -16,6 +76,7 @@ export function AdminOverview() {
   const kpis = data?.kpis;
   const pending = data?.pending ?? [];
   const activity = data?.recentActivity ?? [];
+  const visibleActivity = dedupeActivity(activity);
 
   return (
     <div className="space-y-6">
@@ -30,36 +91,45 @@ export function AdminOverview() {
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard
-          label="Pending approvals"
-          value={isPending ? "—" : (kpis?.pendingApprovals ?? 0)}
-          icon={ClipboardCheck}
-          hint="Listings waiting for a decision."
-          tone="warning"
-        />
-        <StatCard
-          label="Live listings"
-          value={isPending ? "—" : (kpis?.liveListings ?? 0)}
-          icon={Building2}
-          hint="Approved and visible to buyers."
-        />
-        <StatCard
-          label="New users (7 days)"
-          value={isPending ? "—" : (kpis?.newUsers ?? 0)}
-          icon={Users}
-          hint="Buyers, agents, and admins."
-          tone="neutral"
-        />
-        <StatCard
-          label="Open inquiries"
-          value={isPending ? "—" : (kpis?.openInquiries ?? 0)}
-          icon={Inbox}
-          hint="New, contacted, or qualified leads."
-          tone="success"
-        />
+        <StatLink to="/admin/approvals">
+          <StatCard
+            label="Pending approvals"
+            value={isPending ? "—" : (kpis?.pendingApprovals ?? 0)}
+            icon={ClipboardCheck}
+            hint="Listings waiting for a decision."
+            tone="warning"
+          />
+        </StatLink>
+        <StatLink to="/admin/listings">
+          <StatCard
+            label="Live listings"
+            value={isPending ? "—" : (kpis?.liveListings ?? 0)}
+            icon={Building2}
+            hint="Approved and visible to buyers."
+          />
+        </StatLink>
+        <StatLink to="/admin/users">
+          <StatCard
+            label="New users (7 days)"
+            value={isPending ? "—" : (kpis?.newUsers ?? 0)}
+            icon={Users}
+            hint="Buyers, agents, and admins."
+            tone="neutral"
+          />
+        </StatLink>
+        <StatLink to="/admin/inquiries">
+          <StatCard
+            label="Open inquiries"
+            value={isPending ? "—" : (kpis?.openInquiries ?? 0)}
+            icon={Inbox}
+            hint="New, contacted, or qualified leads."
+            tone="success"
+          />
+        </StatLink>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-[1.6fr_1fr]">
+      <div className="grid items-start gap-6 lg:grid-cols-[1.6fr_1fr]">
+        <div className="min-w-0 space-y-6">
         <section className="rounded-lg border border-line bg-surface p-6" aria-labelledby="queue-heading">
           <div className="flex items-start justify-between gap-4">
             <div>
@@ -118,6 +188,23 @@ export function AdminOverview() {
           )}
         </section>
 
+          {isPending ? (
+            <ChartFallback />
+          ) : (
+            <Suspense fallback={<ChartFallback />}>
+              <StatusDonutChart statusCounts={data?.statusCounts ?? {}} />
+            </Suspense>
+          )}
+
+          {isPending ? (
+            <ChartFallback />
+          ) : (
+            <Suspense fallback={<ChartFallback />}>
+              <ActivityTrendChart activity={data?.activityTrend ?? []} />
+            </Suspense>
+          )}
+        </div>
+
         <div className="space-y-6">
           <section className="rounded-lg border border-line bg-surface p-6" aria-labelledby="activity-heading">
             <h3 id="activity-heading" className="text-lg font-semibold text-heading">
@@ -128,9 +215,9 @@ export function AdminOverview() {
                 <Skeleton className="h-10 w-full" />
                 <Skeleton className="h-10 w-full" />
               </div>
-            ) : activity.length ? (
+            ) : visibleActivity.length ? (
               <ol className="mt-4 space-y-3">
-                {activity.map((entry) => (
+                {visibleActivity.map((entry) => (
                   <li key={entry.id} className="border-b border-line pb-3 last:border-0 last:pb-0">
                     <p className="text-sm font-medium text-heading">
                       {auditActionLabels[entry.action] ?? entry.action}

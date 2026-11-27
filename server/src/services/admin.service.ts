@@ -91,31 +91,74 @@ async function usersWithDetails(users: UserDocument[]) {
 
 export async function adminStats() {
   const weekAgo = new Date(Date.now() - 7 * 86_400_000);
+  const now = new Date();
+  const trendStart = new Date(
+    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()) - 29 * 86_400_000,
+  );
 
-  const [pendingApprovals, liveListings, newUsers, openInquiries, pending, logs, statusRows] =
-    await Promise.all([
-      PropertyModel.countDocuments({ status: "pending" }),
-      PropertyModel.countDocuments({ status: "approved", hiddenBySuspension: { $ne: true } }),
-      UserModel.countDocuments({ createdAt: { $gte: weekAgo } }),
-      InquiryModel.countDocuments({ status: { $in: ["new", "contacted", "qualified"] } }),
-      PropertyModel.find({ status: "pending" })
-        .sort({ submittedAt: 1 })
-        .limit(5),
-      AuditLogModel.find().sort({ createdAt: -1 }).limit(6),
-      PropertyModel.aggregate<{ _id: string; count: number }>([
-        { $group: { _id: "$status", count: { $sum: 1 } } },
-      ]),
-    ]);
+  const [
+    pendingApprovals,
+    liveListings,
+    newUsers,
+    openInquiries,
+    pending,
+    logs,
+    statusRows,
+    listingActivityRows,
+    userActivityRows,
+  ] = await Promise.all([
+    PropertyModel.countDocuments({ status: "pending" }),
+    PropertyModel.countDocuments({ status: "approved", hiddenBySuspension: { $ne: true } }),
+    UserModel.countDocuments({ createdAt: { $gte: weekAgo } }),
+    InquiryModel.countDocuments({ status: { $in: ["new", "contacted", "qualified"] } }),
+    PropertyModel.find({ status: "pending" })
+      .sort({ submittedAt: 1 })
+      .limit(5),
+    AuditLogModel.find().sort({ createdAt: -1 }).limit(6),
+    PropertyModel.aggregate<{ _id: string; count: number }>([
+      { $group: { _id: "$status", count: { $sum: 1 } } },
+    ]),
+    PropertyModel.aggregate<{ _id: string; count: number }>([
+      { $match: { createdAt: { $gte: trendStart } } },
+      {
+        $group: {
+          _id: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } },
+          count: { $sum: 1 },
+        },
+      },
+    ]),
+    UserModel.aggregate<{ _id: string; count: number }>([
+      { $match: { createdAt: { $gte: trendStart } } },
+      {
+        $group: {
+          _id: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } },
+          count: { $sum: 1 },
+        },
+      },
+    ]),
+  ]);
 
   const statusCounts = Object.fromEntries(
     statusRows.map((row) => [row._id, row.count]),
   ) as Record<string, number>;
+
+  const listingActivity = new Map(listingActivityRows.map((row) => [row._id, row.count]));
+  const userActivity = new Map(userActivityRows.map((row) => [row._id, row.count]));
+  const activityTrend = Array.from({ length: 30 }, (_, index) => {
+    const date = new Date(trendStart.getTime() + index * 86_400_000).toISOString().slice(0, 10);
+    return {
+      date,
+      listings: listingActivity.get(date) ?? 0,
+      users: userActivity.get(date) ?? 0,
+    };
+  });
 
   return {
     kpis: { pendingApprovals, liveListings, newUsers, openInquiries },
     statusCounts,
     pending: await summarizeProperties(pending),
     recentActivity: await auditDtos(logs),
+    activityTrend,
   };
 }
 

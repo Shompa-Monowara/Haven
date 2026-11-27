@@ -326,6 +326,39 @@ describe("admin approval workflow", () => {
   }, 30_000);
 });
 
+describe("admin dashboard activity trend", () => {
+  it("returns a zero-filled 30-day trend with today's listings and users", async () => {
+    const app = createApp();
+    const agent = await register(app, agentInput);
+    await register(app, {
+      name: "Priya Shah",
+      email: "priya@example.com",
+      password: "HavenBuyer123",
+      role: "buyer",
+      consent: true,
+    });
+    const admin = await adminSession(app);
+    await pendingListing(app, agent.token);
+
+    const response = await request(app)
+      .get("/api/admin/stats")
+      .set("Authorization", `Bearer ${admin.token}`);
+
+    expect(response.status).toBe(200);
+    const trend = response.body.data.activityTrend as Array<{
+      date: string;
+      listings: number;
+      users: number;
+    }>;
+
+    expect(trend).toHaveLength(30);
+    expect(trend[29]!.date).toBe(new Date().toISOString().slice(0, 10));
+    expect(trend[29]!.listings).toBeGreaterThanOrEqual(1);
+    expect(trend[29]!.users).toBeGreaterThanOrEqual(3);
+    expect(trend.slice(0, 29).every((point) => point.listings === 0 && point.users === 0)).toBe(true);
+  }, 30_000);
+});
+
 describe("admin user management", () => {
   it("suspends agents, hides their listings, blocks auth, and restores visibility", async () => {
     const app = createApp();

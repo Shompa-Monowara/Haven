@@ -20,6 +20,12 @@ export interface AuditEntry {
   createdAt: string;
 }
 
+export interface AdminActivityPoint {
+  date: string;
+  listings: number;
+  users: number;
+}
+
 export interface AdminStats {
   kpis: {
     pendingApprovals: number;
@@ -30,6 +36,7 @@ export interface AdminStats {
   statusCounts: Partial<Record<PropertyStatus, number>>;
   pending: PropertySummary[];
   recentActivity: AuditEntry[];
+  activityTrend?: AdminActivityPoint[];
 }
 
 export interface AdminListingAgent {
@@ -67,6 +74,38 @@ export interface AdminUser {
   verified: boolean;
 }
 
+export interface PlatformSettings {
+  id: string | null;
+  review: { standardReviewBusinessDays: number };
+  notifications: {
+    listingDecisionEmails: boolean;
+    offlineMessageEmails: boolean;
+    savedSearchDigests: boolean;
+  };
+  updatedAt: string | null;
+  updatedBy: string | null;
+}
+
+export interface SystemStatus {
+  email: { configured: boolean };
+  storage: { provider: "cloudinary" | "local" };
+  environment: "development" | "test" | "production";
+}
+
+export interface PlatformSettingsPayload {
+  settings: PlatformSettings;
+  status: SystemStatus;
+}
+
+export interface PlatformSettingsPatch {
+  review?: { standardReviewBusinessDays?: number };
+  notifications?: {
+    listingDecisionEmails?: boolean;
+    offlineMessageEmails?: boolean;
+    savedSearchDigests?: boolean;
+  };
+}
+
 export const auditActionLabels: Record<string, string> = {
   "property.submitted": "Submitted for review",
   "property.updated": "Listing updated",
@@ -79,4 +118,5 @@ export const auditActionLabels: Record<string, string> = {
   "user.reactivated": "Account reactivated",
   "agent.verified": "Agent verified",
   "agent.unverified": "Agent verification removed",
+  "settings.update": "Settings updated",
 };
