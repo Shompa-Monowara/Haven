@@ -119,7 +119,7 @@ export function MapPreview() {
                       activeId={null}
                       onActivate={() => undefined}
                       onMoveEnd={() => undefined}
-                      shouldFit
+                      shouldFit={false}
                       fitKey="map-preview"
                       onTileFailure={() => setTileFailed(true)}
                       emptyView={{ lat: 40.7128, lng: -74.006, zoom: 10 }}
