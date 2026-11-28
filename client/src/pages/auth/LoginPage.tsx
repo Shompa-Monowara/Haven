@@ -172,9 +172,9 @@ export function LoginPage() {
           </Link>
         </p>
 
-        {import.meta.env.DEV ? (
+        {import.meta.env.DEV || import.meta.env.VITE_SHOW_DEMO_LOGIN === "true" ? (
           <div className="rounded-md border border-dashed border-line bg-canvas p-3.5 text-xs text-body">
-            <p className="font-medium text-heading">Development demo</p>
+            <p className="font-medium text-heading">Demo accounts</p>
             <ul className="mt-2 space-y-1.5">
               {[
                 { label: "Admin", email: "admin@haven.test", password: "HavenAdmin123" },

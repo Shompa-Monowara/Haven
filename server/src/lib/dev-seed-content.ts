@@ -50,7 +50,7 @@ async function ensureUser(input: {
 }
 
 export async function seedDevContent(): Promise<void> {
-  if (env.NODE_ENV !== "development") return;
+  if (env.NODE_ENV !== "development" && process.env.ENABLE_DEMO_DATA !== "true") return;
 
   const buyer = await ensureUser({
     name: "Priya Shah",
