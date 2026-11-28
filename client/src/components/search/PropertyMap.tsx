@@ -22,9 +22,10 @@ interface PropertyMapProps {
 }
 
 const VIEWPORT_KEY = "haven:mapViewport";
-const MIN_ZOOM = 3;
+const MIN_ZOOM = 4;
 const DEFAULT_CENTER: [number, number] = [39.8283, -98.5795];
 const DEFAULT_ZOOM = 4;
+const US_BOUNDS = L.latLngBounds([22, -128], [51, -64]);
 
 function priceLabel(property: PropertySummary) {
   return property.listingType === "rent"
@@ -175,6 +176,8 @@ export default function PropertyMap({
       attributionControl: true,
       scrollWheelZoom,
       minZoom: MIN_ZOOM,
+      maxBounds: US_BOUNDS,
+      maxBoundsViscosity: 1.0,
       worldCopyJump: true,
     });
     mapRef.current = map;
